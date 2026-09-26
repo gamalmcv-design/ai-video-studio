@@ -1,12 +1,19 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { generateVideo } from '../services/videoGenerator';
 
 const videoModels = ['Seedance 2.0', 'Seedance 2.5'];
-const videoDurations = ['10s', '15s', '20s', '25s', '30s'];
+const videoDurations = [
+  { value: '10s', label: '10s' },
+  { value: '15s', label: '15s' },
+  { value: '20s', label: '20s' },
+  { value: '25s', label: '25s' },
+  { value: '30s', label: '30s' },
+];
 const videoQualities = ['480p', '760p', '1080p', '4K'];
 const videoAspectRatios = ['9:16', '16:9', '1:1'];
 
 function DashboardVideoPage() {
+  const fileInputRef = useRef(null);
   const [mode, setMode] = useState('image');
   const [selectedModel, setSelectedModel] = useState('Seedance 2.5');
   const [selectedDuration, setSelectedDuration] = useState('15s');
@@ -33,6 +40,10 @@ function DashboardVideoPage() {
   const handleRemoveImage = () => {
     setReferenceImage(null);
     setErrorMessage('');
+  };
+
+  const handleReplaceImage = () => {
+    fileInputRef.current?.click();
   };
 
   const handleGenerate = async () => {
@@ -71,6 +82,23 @@ function DashboardVideoPage() {
     setErrorMessage(response.error || 'تعذر إنشاء الفيديو حاليًا، حاول مرة أخرى.');
   };
 
+  const handleDownload = () => {
+    if (!videoUrl) return;
+
+    const link = document.createElement('a');
+    link.href = videoUrl;
+    link.download = 'manassat-elsharqawy-video.mp4';
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleTryAgain = () => {
+    setErrorMessage('');
+    setStatus('idle');
+  };
+
   const handleGoHome = () => {
     window.history.pushState({}, '', '/');
     window.dispatchEvent(new PopStateEvent('popstate'));
@@ -92,22 +120,38 @@ function DashboardVideoPage() {
           </div>
         </div>
         <button type="button" className="ghost-button" onClick={handleGoHome}>
-          ‹ العودة
+          ← الرئيسية
         </button>
       </header>
 
       <main className="container image-page-shell video-page-shell">
         <section className="image-generator-card card video-card">
-          <div className="section-heading">
-            <div>
+          <div className="video-studio-header">
+            <button type="button" className="studio-back-btn" onClick={handleGoHome}>
+              ← الرئيسية
+            </button>
+            <div className="studio-heading-wrap">
               <span className="mini-badge">Video</span>
               <h2>توليد الفيديو</h2>
             </div>
-            {status !== 'idle' && (
-              <span className="status-pill">
-                {status === 'generating' ? 'جاري تجهيز الفيديو...' : status === 'completed' ? 'تم الإنشاء' : 'خطأ'}
-              </span>
-            )}
+          </div>
+
+          <p className="studio-subtitle">حوّل فكرتك إلى فيديو سينمائي بالذكاء الاصطناعي</p>
+
+          <div className="field-block compact-field">
+            <span className="field-label">النموذج</span>
+            <div className="choice-grid model-grid">
+              {videoModels.map((item) => (
+                <button
+                  type="button"
+                  key={item}
+                  className={selectedModel === item ? 'choice-option active' : 'choice-option'}
+                  onClick={() => setSelectedModel(item)}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="field-block compact-field">
@@ -137,16 +181,28 @@ function DashboardVideoPage() {
               <span className="field-label">صورة مرجعية</span>
               {referenceImage ? (
                 <div className="image-preview-box">
-                  <img src={referenceImage} alt="معاينة الفهرس" />
-                  <button type="button" className="remove-image" onClick={handleRemoveImage}>
-                    حذف
-                  </button>
+                  <img src={referenceImage} alt="معاينة الصورة المرجعية" />
+                  <div className="image-inline-actions">
+                    <button type="button" className="remove-image" onClick={handleReplaceImage}>
+                      تغيير الصورة
+                    </button>
+                    <button type="button" className="remove-image danger" onClick={handleRemoveImage}>
+                      حذف
+                    </button>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    style={{ display: 'none' }}
+                  />
                 </div>
               ) : (
                 <label className="upload-box">
                   <span className="upload-plus">＋</span>
-                  <span>رفع صورة</span>
-                  <input type="file" accept="image/*" onChange={handleImageUpload} />
+                  <span>أضف صورة مرجعية</span>
+                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} />
                 </label>
               )}
             </div>
@@ -160,24 +216,8 @@ function DashboardVideoPage() {
               id="video-prompt"
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
-              placeholder="اكتب وصف المشهد الذي تريد إنشاءه..."
+              placeholder="اكتب وصف الفيديو بالتفصيل..."
             />
-          </div>
-
-          <div className="field-block compact-field">
-            <span className="field-label">النموذج</span>
-            <div className="choice-grid">
-              {videoModels.map((item) => (
-                <button
-                  type="button"
-                  key={item}
-                  className={selectedModel === item ? 'choice-option active' : 'choice-option'}
-                  onClick={() => setSelectedModel(item)}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div className="field-block compact-field">
@@ -186,11 +226,11 @@ function DashboardVideoPage() {
               {videoDurations.map((item) => (
                 <button
                   type="button"
-                  key={item}
-                  className={selectedDuration === item ? 'choice-option active' : 'choice-option'}
-                  onClick={() => setSelectedDuration(item)}
+                  key={item.value}
+                  className={selectedDuration === item.value ? 'choice-option active' : 'choice-option'}
+                  onClick={() => setSelectedDuration(item.value)}
                 >
-                  {item}
+                  {item.label}
                 </button>
               ))}
             </div>
@@ -213,7 +253,7 @@ function DashboardVideoPage() {
           </div>
 
           <div className="field-block compact-field">
-            <span className="field-label">مقاس الفيديو</span>
+            <span className="field-label">المقاس</span>
             <div className="choice-grid mini-grid">
               {videoAspectRatios.map((item) => (
                 <button
@@ -228,34 +268,55 @@ function DashboardVideoPage() {
             </div>
           </div>
 
-          <button type="button" className="generate-button image-button" onClick={handleGenerate} disabled={!canGenerate || status === 'generating'}>
+          <button
+            type="button"
+            className="generate-button image-button"
+            onClick={handleGenerate}
+            disabled={!canGenerate || status === 'generating'}
+          >
             {status === 'generating' ? 'جاري تجهيز الفيديو...' : '✦ توليد الفيديو'}
           </button>
 
-          {status === 'generating' && (
-            <div className="loading-row" aria-live="polite">
-              <span className="loading-orb" />
-              <span>جاري تجهيز الفيديو...</span>
+          <div className="result-card compact-result-card">
+            <div className="result-header-row">
+              <h3>الفيديو الناتج</h3>
             </div>
-          )}
 
-          {errorMessage && <div className="error-banner">{errorMessage}</div>}
+            {status === 'idle' && <div className="studio-empty-state">سيظهر الفيديو هنا بعد الإنشاء</div>}
 
-          {videoUrl && (
-            <div className="result-card">
-              <div className="video-preview-box">
-                <video src={videoUrl} controls playsInline />
+            {status === 'generating' && (
+              <div className="loading-row result-loading" aria-live="polite">
+                <span className="loading-orb" />
+                <span>جاري إنشاء الفيديو...</span>
               </div>
-              <div className="video-actions">
-                <button type="button" className="mini-action-btn gold-btn">
-                  حفظ الفيديو
-                </button>
-                <button type="button" className="mini-action-btn" onClick={handleGenerate}>
-                  توليد مرة أخرى
+            )}
+
+            {status === 'error' && (
+              <div className="result-error-box">
+                <div className="error-banner inline-error">تعذر إنشاء الفيديو</div>
+                <div className="error-subtext">حاول مرة أخرى</div>
+                <button type="button" className="mini-action-btn gold-btn retry-btn" onClick={handleTryAgain}>
+                  إعادة المحاولة
                 </button>
               </div>
-            </div>
-          )}
+            )}
+
+            {status === 'completed' && videoUrl && (
+              <>
+                <div className="video-preview-box">
+                  <video src={videoUrl} controls playsInline />
+                </div>
+                <div className="video-actions">
+                  <button type="button" className="mini-action-btn gold-btn" onClick={handleDownload}>
+                    ⬇️ تحميل الفيديو
+                  </button>
+                  <button type="button" className="mini-action-btn" onClick={handleGenerate}>
+                    ↻ إعادة الإنشاء
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </section>
       </main>
     </div>
