@@ -78,10 +78,7 @@ function App() {
           <div className="hero-copy">
             <span className="eyebrow">إبداع يليق بالعلامة الرائدة</span>
             <h1>منصة الشرقاوي</h1>
-            <p>
-              أدوات عربية فاخرة لتوليد الفيديوهات، الصور، والسكريبتات داخل واجهة مناسبة
-              للموبايل، مع تجربة احترافية ومتماسكة.
-            </p>
+            <p>أدوات عربية فاخرة لتوليد الفيديوهات، الصور، وقصص العلامة.</p>
           </div>
 
           <div className="hero-visual" aria-hidden="true">
@@ -92,7 +89,7 @@ function App() {
             </div>
             <div className="floating-panel panel-bottom">
               <span>Luxury</span>
-              <strong>Damage free</strong>
+              <strong>AI Studio</strong>
             </div>
           </div>
         </section>
@@ -114,6 +111,14 @@ function App() {
               <h2>{item.title}</h2>
             </button>
           ))}
+        </section>
+
+        <section className="home-cta card">
+          <span className="mini-label">ابدأ مشروعك</span>
+          <p>حوّل فكرتك إلى فيديو أو صورة أو قصة</p>
+          <button type="button" className="primary-button compact-cta" onClick={() => navigateTo('/dashboard/video')}>
+            ابدأ الآن ✦
+          </button>
         </section>
       </main>
     </div>
