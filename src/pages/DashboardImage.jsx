@@ -47,6 +47,7 @@ function DashboardImagePage() {
 
     setStatus('generating');
     setErrorMessage('');
+    setResultImage(null);
 
     const response = await generateImage({
       mode: generationMode,
@@ -67,7 +68,7 @@ function DashboardImagePage() {
     setErrorMessage(response.error || 'تعذر إنشاء الصورة حاليًا، حاول مرة أخرى.');
   };
 
-  const handleSaveImage = () => {
+  const handleDownloadImage = () => {
     if (!resultImage) return;
     const link = document.createElement('a');
     link.href = resultImage;
@@ -75,6 +76,10 @@ function DashboardImagePage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleSaveImage = () => {
+    handleDownloadImage();
   };
 
   const handleGoHome = () => {
@@ -233,30 +238,41 @@ function DashboardImagePage() {
             {status === 'generating' ? 'جاري إنشاء الصورة...' : '✦ توليد الصورة'}
           </button>
 
-          {status === 'generating' && (
-            <div className="loading-row" aria-live="polite">
-              <span className="loading-orb" />
-              <span>جاري إنشاء الصورة...</span>
-            </div>
-          )}
+          <div className="result-box" aria-live="polite">
+            <div className="result-box-title">الصورة الناتجة</div>
 
-          {errorMessage && <div className="error-banner">{errorMessage}</div>}
+            {status === 'generating' && (
+              <div className="result-loading">
+                <span className="loading-orb" />
+                <span>جاري إنشاء الصورة...</span>
+              </div>
+            )}
 
-          {resultImage && (
-            <div className="result-card">
-              <div className="result-image-wrap">
-                <img src={resultImage} alt="نتيجة توليد الصورة" />
-              </div>
-              <div className="result-actions">
-                <button type="button" className="mini-action-btn gold-btn" onClick={handleSaveImage}>
-                  حفظ الصورة
-                </button>
-                <button type="button" className="mini-action-btn" onClick={handleGenerate}>
-                  إعادة إنشاء
-                </button>
-              </div>
-            </div>
-          )}
+            {!resultImage && status !== 'generating' && !errorMessage && (
+              <div className="result-empty">ستظهر الصورة هنا بعد الإنشاء</div>
+            )}
+
+            {errorMessage && !resultImage && <div className="result-error">{errorMessage}</div>}
+
+            {resultImage && (
+              <>
+                <div className="result-image-wrap">
+                  <img src={resultImage} alt="نتيجة توليد الصورة" />
+                </div>
+                <div className="result-actions">
+                  <button type="button" className="mini-action-btn gold-btn" onClick={handleDownloadImage}>
+                    ⬇ تحميل الصورة
+                  </button>
+                  <button type="button" className="mini-action-btn" onClick={handleGenerate}>
+                    ↻ إعادة الإنشاء
+                  </button>
+                  <button type="button" className="mini-action-btn" onClick={handleSaveImage}>
+                    حفظ الصورة
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </section>
       </main>
     </div>
