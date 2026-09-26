@@ -4,11 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"node server/server.js\" \"vite --host 0.0.0.0 --port 3000\"",
-    "dev:front": "vite --host 0.0.0.0 --port 3000",
-    "dev:server": "node server/server.js",
+    "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0 --port 4173"
+    "preview": "vite preview"
   },
   "dependencies": {
     "concurrently": "^9.1.2",
