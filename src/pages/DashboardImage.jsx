@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { generateImage } from '../services/imageGenerator';
 
-const imageModels = ['Seedream 4.5', 'Seedream 4.0'];
+const imageModels = [
+  { value: 'GPT Image 2.5', badge: 'احترافي' },
+  { value: 'Nano Banana Pro', badge: 'استوديو' },
+];
 const imageSizes = ['1:1', '9:16', '16:9', '4:5', '3:4'];
 const imageQualities = ['480p', '720p', '1080p', '4K'];
 
 function DashboardImagePage() {
   const [generationMode, setGenerationMode] = useState('image');
-  const [selectedModel, setSelectedModel] = useState('Seedream 4.5');
+  const [selectedModel, setSelectedModel] = useState('GPT Image 2.5');
   const [selectedSize, setSelectedSize] = useState('1:1');
   const [selectedQuality, setSelectedQuality] = useState('1080p');
   const [referenceImage, setReferenceImage] = useState(null);
@@ -182,8 +185,8 @@ function DashboardImagePage() {
               onChange={(event) => setSelectedModel(event.target.value)}
             >
               {imageModels.map((item) => (
-                <option key={item} value={item}>
-                  {item}
+                <option key={item.value} value={item.value}>
+                  {item.value} — {item.badge}
                 </option>
               ))}
             </select>
