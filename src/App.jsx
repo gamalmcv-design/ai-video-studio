@@ -19,7 +19,7 @@ const toolCards = [
     label: 'Image',
   },
   {
-    title: 'كتابة السكريبتات',
+    title: 'صناعة الأفكار',
     icon: '✍️',
     route: '/dashboard/script',
     accent: 'gold',

@@ -26,6 +26,7 @@ function DashboardScriptPage() {
   const [status, setStatus] = useState('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [result, setResult] = useState(null);
+  const [copiedSceneIndex, setCopiedSceneIndex] = useState(null);
 
   const canGenerate = idea.trim().length > 0;
 
@@ -96,6 +97,18 @@ function DashboardScriptPage() {
     ideaInputRef.current?.focus();
   };
 
+  const handleCopyScene = async (scene, index) => {
+    try {
+      await navigator.clipboard.writeText(scene);
+      setCopiedSceneIndex(index);
+      window.setTimeout(() => {
+        setCopiedSceneIndex((currentIndex) => (currentIndex === index ? null : currentIndex));
+      }, 1200);
+    } catch (error) {
+      // noop
+    }
+  };
+
   const handleGoHome = () => {
     window.history.pushState({}, '', '/');
     window.dispatchEvent(new PopStateEvent('popstate'));
@@ -126,7 +139,7 @@ function DashboardScriptPage() {
           <div className="section-heading">
             <div>
               <span className="mini-badge">Script</span>
-              <h2>كتابة السكريبتات</h2>
+              <h2>صناعة الأفكار</h2>
             </div>
             {status !== 'idle' && (
               <span className="status-badge">
@@ -269,7 +282,18 @@ function DashboardScriptPage() {
                 <div className="script-content">
                   {result.scenes.map((scene, index) => (
                     <div key={`${scene}-${index}`} className="scene-line">
-                      {index + 1}. {scene}
+                      <div className="scene-copy-row">
+                        <span>
+                          {index + 1}. {scene}
+                        </span>
+                        <button
+                          type="button"
+                          className="scene-copy-btn"
+                          onClick={() => handleCopyScene(scene, index)}
+                        >
+                          {copiedSceneIndex === index ? 'تم نسخ المشهد ✓' : '📋 نسخ المشهد'}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

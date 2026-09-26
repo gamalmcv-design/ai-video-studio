@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { generateVideo } from '../services/videoGenerator';
 
-const videoModels = ['Seedance 2.5', 'سباداتيس 2.0'];
+const videoModels = ['Seedance 2.0', 'Seedance 2.5'];
 const videoDurations = ['10s', '15s', '20s', '25s', '30s'];
 const videoQualities = ['480p', '760p', '1080p', '4K'];
 const videoAspectRatios = ['9:16', '16:9', '1:1'];
