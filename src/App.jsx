@@ -115,7 +115,9 @@ function App() {
 
         <section className="home-cta card">
           <span className="mini-label">ابدأ مشروعك</span>
-          <p>حوّل فكرتك إلى فيديو أو صورة أو قصة</p>
+          <div className="cta-author">مصطفى الشرقاوي</div>
+          <div className="cta-brand">منصة الشرقاوي</div>
+          <p>حوّل فكرتك إلى فيديو أو صورة أو قصة إبداعية.</p>
           <button type="button" className="primary-button compact-cta" onClick={() => navigateTo('/dashboard/video')}>
             ابدأ الآن ✦
           </button>
