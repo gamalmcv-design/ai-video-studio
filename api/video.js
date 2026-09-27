@@ -12,12 +12,17 @@ export default async function handler(req, res) {
       return res.status(result.status || 500).json({
         ok: false,
         message: result.message,
+        developerMessage: result.developerMessage || undefined,
       });
     }
 
     return res.status(200).json({
       ok: true,
       videoUrl: result.videoUrl,
+      model: result.model,
+      duration: result.duration,
+      quality: result.quality,
+      aspectRatio: result.aspectRatio,
     });
   } catch (error) {
     return res.status(500).json({

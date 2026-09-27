@@ -1,37 +1,82 @@
 const modelMap = {
   'Seedance 2.5': process.env.VIDEO_MODEL_SEEDANCE_25 || '',
+  'Seedance 2.0': process.env.VIDEO_MODEL_SEEDANCE_20 || '',
   'سباداتيس 2.0': process.env.VIDEO_MODEL_SPADATIS_20 || '',
 };
 
 const allowedAspectRatios = {
   '9:16': '9:16',
   '16:9': '16:9',
+  '4:3': '4:3',
   '1:1': '1:1',
+  '3:4': '3:4',
+  '21:9': '21:9',
+  adaptive: 'adaptive',
 };
 
 const supportedQualityMap = {
   '480p': '480p',
-  '760p': '760p',
-  '1080p': '1080p',
-  '4K': '4K',
+  '720p': '720p',
+  '1080p': '720p',
+  '4K': '720p',
 };
 
-const supportedDurations = ['10s', '15s', '20s', '25s', '30s'];
+const supportedDurations = [4, 5, 6, 8, 10, 12, 15, 20, 25, 30];
 
 function normalizeDuration(value) {
-  return supportedDurations.includes(value) ? value : '15s';
+  const raw = typeof value === 'string' ? value.replace(/s$/i, '') : value;
+  const parsed = Number(raw);
+
+  if (!Number.isFinite(parsed)) {
+    return 15;
+  }
+
+  if (parsed < 4) {
+    return 4;
+  }
+
+  if (parsed > 30) {
+    return 30;
+  }
+
+  return parsed;
 }
 
 function mapQuality(modelName, quality) {
-  if (modelName === 'Seedance 2.5' && quality === '760p') {
-    return '1080p';
+  if (modelName === 'Seedance 2.5') {
+    return supportedQualityMap[quality] || '720p';
   }
 
-  if (modelName === 'سباداتيس 2.0' && quality === '4K') {
-    return '1080p';
+  if (modelName === 'Seedance 2.0' || modelName === 'سباداتيس 2.0') {
+    return supportedQualityMap[quality] || '720p';
   }
 
-  return supportedQualityMap[quality] || '1080p';
+  return supportedQualityMap[quality] || '720p';
+}
+
+function buildStatusUrl(baseUrl, requestId) {
+  if (!baseUrl) {
+    return '';
+  }
+
+  if (baseUrl.includes('{request_id}')) {
+    return baseUrl.replace('{request_id}', encodeURIComponent(requestId));
+  }
+
+  const normalized = baseUrl.replace(/\/$/, '');
+  return `${normalized}/${encodeURIComponent(requestId)}`;
+}
+
+function extractErrorMessage(status, data) {
+  if (status === 400) return 'طلب غير صالح في مزود الفيديو.';
+  if (status === 401) return 'غير مصرح للوصول إلى مزود الفيديو.';
+  if (status === 402) return 'تحتاج إلى تفعيل رصيد مزود الفيديو.';
+  if (status === 403) return 'تم رفض الوصول إلى مزود الفيديو.';
+  if (status === 429) return 'تم تجاوز حد الطلبات. حاول لاحقًا.';
+  if (status === 500) return 'خطأ في مزود الفيديو. حاول مرة أخرى.';
+
+  const message = data?.message || data?.error || data?.detail || data?.error?.message || 'تعذر إنشاء الفيديو حاليًا.';
+  return typeof message === 'string' ? message : 'تعذر إنشاء الفيديو حاليًا.';
 }
 
 export function validateVideoRequest(payload) {
@@ -63,11 +108,13 @@ export function validateVideoRequest(payload) {
     throw new Error('هذا المقاس غير متاح لهذا الموديل.');
   }
 
+  const normalizedQuality = mapQuality(payload.model, payload.quality);
+
   return {
     model: payload.model,
     prompt: payload.prompt?.trim() || '',
     duration: normalizeDuration(payload.duration),
-    quality: mapQuality(payload.model, payload.quality),
+    quality: normalizedQuality,
     aspectRatio: allowedAspectRatios[payload.aspectRatio],
     mode: payload.mode || 'text',
     referenceImage: payload.referenceImage || null,
@@ -84,11 +131,88 @@ export function getVideoModelId(modelName) {
   return modelId;
 }
 
+async function pollVideoStatus(statusUrl, requestId, providerApiKey, maxAttempts = 30) {
+  const endpoint = buildStatusUrl(statusUrl, requestId);
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Ocp-Apim-Subscription-Key': providerApiKey,
+      },
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      return {
+        ok: false,
+        status: response.status || 500,
+        message: extractErrorMessage(response.status, data),
+        developerMessage: data?.error || 'Video status polling failed',
+      };
+    }
+
+    const data = await response.json().catch(() => ({}));
+    const status = String(data?.status || data?.state || '').toUpperCase();
+
+    if (status === 'COMPLETED') {
+      const mediaUrl =
+        data?.output?.media_url?.[0] ||
+        data?.output?.media_url ||
+        data?.output?.url ||
+        data?.video_url ||
+        data?.url ||
+        data?.result?.videoUrl ||
+        null;
+
+      if (!mediaUrl) {
+        return {
+          ok: false,
+          status: 502,
+          message: 'تعذر الحصول على رابط الفيديو بعد اكتماله.',
+          developerMessage: 'Completed response did not include media_url',
+        };
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        videoUrl: mediaUrl,
+      };
+    }
+
+    if (status === 'FAILED' || status === 'ERROR') {
+      return {
+        ok: false,
+        status: 500,
+        message: 'تعذر إنشاء الفيديو في مزود الفيديو.',
+        developerMessage: data?.error || 'Video generation failed',
+      };
+    }
+
+    if (status === 'QUEUED' || status === 'PROCESSING') {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      continue;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  }
+
+  return {
+    ok: false,
+    status: 504,
+    message: 'استغرقت عملية إنشاء الفيديو وقتًا أطول من المتوقع.',
+    developerMessage: 'Video generation timed out during polling',
+  };
+}
+
 export async function createVideoGeneration(payload) {
   const normalized = validateVideoRequest(payload);
 
   const providerUrl = process.env.VIDEO_PROVIDER_URL;
   const providerApiKey = process.env.VIDEO_PROVIDER_API_KEY;
+  const providerStatusUrl = process.env.VIDEO_PROVIDER_STATUS_URL;
 
   if (!providerUrl || !providerApiKey) {
     return {
@@ -102,20 +226,26 @@ export async function createVideoGeneration(payload) {
   const modelId = getVideoModelId(normalized.model);
 
   const requestBody = {
-    model: modelId,
-    prompt: normalized.prompt,
+    content: [
+      {
+        type: 'text',
+        text: normalized.prompt,
+      },
+    ],
+    ratio: normalized.aspectRatio,
+    resolution: normalized.quality,
     duration: normalized.duration,
-    quality: normalized.quality,
-    aspectRatio: normalized.aspectRatio,
-    mode: normalized.mode,
-    image: normalized.referenceImage || undefined,
+    generate_audio: true,
+    watermark: false,
+    output_format: 'mp4',
+    model: modelId,
   };
 
   const response = await fetch(providerUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${providerApiKey}`,
+      'Ocp-Apim-Subscription-Key': providerApiKey,
     },
     body: JSON.stringify(requestBody),
   });
@@ -125,27 +255,69 @@ export async function createVideoGeneration(payload) {
     return {
       ok: false,
       status: response.status || 500,
-      message: 'تعذر إنشاء الفيديو حاليًا، حاول مرة أخرى.',
+      message: extractErrorMessage(response.status, data),
       developerMessage: data?.error || 'Video provider request failed',
     };
   }
 
-  const data = await response.json();
-  const videoUrl = data.videoUrl || data.outputUrl || data.url || data.result?.videoUrl || null;
+  const data = await response.json().catch(() => ({}));
 
-  if (!videoUrl) {
+  const directVideoUrl =
+    data?.videoUrl ||
+    data?.outputUrl ||
+    data?.url ||
+    data?.result?.videoUrl ||
+    data?.output?.media_url?.[0] ||
+    null;
+
+  if (directVideoUrl) {
+    return {
+      ok: true,
+      status: 200,
+      videoUrl: directVideoUrl,
+      model: normalized.model,
+      duration: normalized.duration,
+      quality: normalized.quality,
+      aspectRatio: normalized.aspectRatio,
+    };
+  }
+
+  const requestId = data?.request_id || data?.requestId || data?.id || data?.jobId || null;
+  const pollingUrl = data?.polling_url || data?.pollingUrl || data?.statusUrl || data?.status_url || providerStatusUrl || null;
+
+  if (!requestId) {
     return {
       ok: false,
       status: 502,
-      message: 'تعذر إنشاء الفيديو حاليًا، حاول مرة أخرى.',
-      developerMessage: 'Video provider response did not include a video URL',
+      message: 'لم يرد مزود الفيديو بمعرّف المهمة المطلوبة.',
+      developerMessage: 'Missing request_id in provider response',
+    };
+  }
+
+  if (!pollingUrl) {
+    return {
+      ok: false,
+      status: 502,
+      message: 'لم يرد مزود الفيديو بعنوان التحقق من الحالة.',
+      developerMessage: 'Missing polling url in provider response',
+    };
+  }
+
+  const pollingResult = await pollVideoStatus(pollingUrl, requestId, providerApiKey);
+
+  if (!pollingResult.ok) {
+    return {
+      ok: false,
+      status: pollingResult.status || 500,
+      message: pollingResult.message || 'تعذر إنشاء الفيديو حاليًا.',
+      developerMessage: pollingResult.developerMessage || 'Video polling failed',
     };
   }
 
   return {
     ok: true,
     status: 200,
-    videoUrl,
+    videoUrl: pollingResult.videoUrl,
     model: normalized.model,
     duration: normalized.duration,
     quality: normalized.quality,
