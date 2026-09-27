@@ -198,33 +198,37 @@ function DashboardImagePage() {
 
           <div className="field-block compact-field">
             <span className="field-label">مقاس الصورة</span>
-            <div className="choice-grid mini-grid">
-              {imageSizes.map((item) => (
-                <button
-                  type="button"
-                  key={item}
-                  className={selectedSize === item ? 'choice-option active' : 'choice-option'}
-                  onClick={() => setSelectedSize(item)}
-                >
-                  {item}
-                </button>
-              ))}
+            <div className="selection-scroll image-selection-scroll">
+              <div className="image-choice-grid">
+                {imageSizes.map((item) => (
+                  <button
+                    type="button"
+                    key={item}
+                    className={selectedSize === item ? 'choice-option active' : 'choice-option'}
+                    onClick={() => setSelectedSize(item)}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
           <div className="field-block compact-field">
             <span className="field-label">الجودة</span>
-            <div className="choice-grid mini-grid">
-              {imageQualities.map((item) => (
-                <button
-                  type="button"
-                  key={item}
-                  className={selectedQuality === item ? 'choice-option active' : 'choice-option'}
-                  onClick={() => setSelectedQuality(item)}
-                >
-                  {item}
-                </button>
-              ))}
+            <div className="selection-scroll image-selection-scroll">
+              <div className="image-choice-grid quality-choice-grid">
+                {imageQualities.map((item) => (
+                  <button
+                    type="button"
+                    key={item}
+                    className={selectedQuality === item ? 'choice-option active' : 'choice-option'}
+                    onClick={() => setSelectedQuality(item)}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -238,7 +242,9 @@ function DashboardImagePage() {
           </button>
 
           <div className="result-box" aria-live="polite">
-            <div className="result-box-title">الصورة الناتجة</div>
+            <div className="result-box-head">
+              <div className="result-box-title">الصورة الناتجة</div>
+            </div>
 
             {status === 'generating' && (
               <div className="result-loading">
