@@ -1,20 +1,22 @@
+import { generateImage } from 'ai';
+
 const imageModelMap = {
-  'Seedream v5.0 Lite': process.env.IMAGE_MODEL_SEEDREAM_5_LITE || 'seedream-5-lite',
+  'Seedream v5.0 Lite': 'bytedance/seedream-5.0-lite',
 };
 
 const aspectRatioMap = {
-  '1:1': '1:1',
-  '9:16': '9:16',
-  '16:9': '16:9',
-  '4:5': '4:5',
-  '3:4': '3:4',
+  '1:1': '1024x1024',
+  '9:16': '768x1152',
+  '16:9': '1152x768',
+  '4:5': '1024x1280',
+  '3:4': '1024x1280',
 };
 
 const supportedQualityMap = {
-  '480p': '480p',
-  '720p': '720p',
-  '1080p': '1080p',
-  '4K': '4K',
+  '480p': '1024x1024',
+  '720p': '1024x1024',
+  '1080p': '1024x1024',
+  '4K': '1536x1536',
 };
 
 function ensureSupportedModel(modelName) {
@@ -23,6 +25,55 @@ function ensureSupportedModel(modelName) {
   }
 
   return modelName;
+}
+
+function resolveImageSize(aspectRatio, quality) {
+  const explicitSize = aspectRatioMap[aspectRatio] || aspectRatioMap['1:1'];
+  const qualitySize = supportedQualityMap[quality] || explicitSize;
+
+  if (quality === '4K') {
+    return qualitySize;
+  }
+
+  return explicitSize || qualitySize;
+}
+
+function toDataUrlFromImage(imageLike) {
+  if (!imageLike) {
+    return null;
+  }
+
+  if (typeof imageLike === 'string') {
+    if (imageLike.startsWith('data:')) {
+      return imageLike;
+    }
+
+    if (imageLike.startsWith('http://') || imageLike.startsWith('https://')) {
+      return imageLike;
+    }
+
+    return `data:image/png;base64,${imageLike}`;
+  }
+
+  if (imageLike.base64) {
+    const mimeType = imageLike.mimeType || 'image/png';
+    return `data:${mimeType};base64,${imageLike.base64}`;
+  }
+
+  if (imageLike.uint8Array) {
+    const bytes = imageLike.uint8Array;
+    const base64 = Buffer.from(bytes).toString('base64');
+    const mimeType = imageLike.mimeType || 'image/png';
+    return `data:${mimeType};base64,${base64}`;
+  }
+
+  if (imageLike.buffer) {
+    const base64 = Buffer.from(imageLike.buffer).toString('base64');
+    const mimeType = imageLike.mimeType || 'image/png';
+    return `data:${mimeType};base64,${base64}`;
+  }
+
+  return null;
 }
 
 export function validateImageRequest(payload = {}) {
@@ -44,7 +95,7 @@ export function validateImageRequest(payload = {}) {
     throw new Error('يرجى كتابة وصف الصورة.');
   }
 
-  if (!aspectRatio || !aspectRatioMap[aspectRatio]) {
+  if (aspectRatio && !aspectRatioMap[aspectRatio]) {
     throw new Error('هذا المقاس غير متاح لهذا الموديل.');
   }
 
@@ -56,8 +107,7 @@ export function validateImageRequest(payload = {}) {
     model: modelName,
     mode,
     prompt: prompt || '',
-    aspectRatio: aspectRatioMap[aspectRatio],
-    quality: supportedQualityMap[quality],
+    size: resolveImageSize(aspectRatio, quality),
     referenceImage: payload.referenceImage || null,
   };
 }
@@ -75,149 +125,92 @@ export function resolveModelId(modelName) {
 export async function createImageGeneration(payload = {}) {
   try {
     const normalized = validateImageRequest(payload);
-    const providerUrl = process.env.IMAGE_PROVIDER_URL;
-    const providerApiKey = process.env.IMAGE_PROVIDER_API_KEY;
+    const apiKey = process.env.AI_GATEWAY_API_KEY;
 
-    if (!providerUrl || !providerApiKey) {
+    if (!apiKey) {
       return {
         ok: false,
         status: 503,
-        message: 'لم يتم تهيئة مزود الصور في الخادم. أضف متغيرات البيئة المطلوبة.',
+        message: 'لم يتم تهيئة مزود الصور في الخادم. أضف متغير البيئة AI_GATEWAY_API_KEY.',
       };
     }
 
-    const requestBody = {
+    const result = await generateImage({
       model: resolveModelId(normalized.model),
       prompt: normalized.prompt,
-      aspectRatio: normalized.aspectRatio,
-      quality: normalized.quality,
-      mode: normalized.mode,
-      image: normalized.referenceImage || undefined,
-    };
-
-    const response = await fetch(providerUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${providerApiKey}`,
+      size: normalized.size,
+      providerOptions: {
+        gateway: {
+          apiKey,
+        },
       },
-      body: JSON.stringify(requestBody),
     });
 
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
+    const imageData = result?.image || result?.output?.image || null;
+    const imageUrl = toDataUrlFromImage(imageData);
+
+    if (!imageUrl) {
       return {
         ok: false,
-        status: response.status || 500,
-        message: 'تعذر إنشاء الصورة حاليًا، حاول مرة أخرى.',
-        details: data?.error || 'Image provider request failed',
+        status: 502,
+        message: 'تعذر إنشاء الصورة حاليًا، لم يرد رابط صورة صالح من خادم AI Gateway.',
       };
     }
 
-    const data = await response.json();
-    const resultUrl = data.imageUrl || data.url || data.outputUrl || data.result?.imageUrl || null;
-    const jobId = data.jobId || data.id || data.taskId || null;
-
-    if (resultUrl) {
-      return {
-        ok: true,
-        status: 200,
-        imageUrl: resultUrl,
-        jobId,
-      };
-    }
-
-    if (jobId) {
-      return {
-        ok: true,
-        status: 202,
-        jobId,
-        message: 'جاري إنشاء الصورة...',
-      };
-    }
-
-    return {
-      ok: false,
-      status: 502,
-      message: 'تعذر إنشاء الصورة حاليًا، حاول مرة أخرى.',
-      details: 'Image provider response did not include a usable result URL or job ID',
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      status: 500,
-      message: error?.message || 'حدث خطأ أثناء الاتصال بالخدمة.',
-    };
-  }
-}
-
-export async function getImageJobStatus(jobId) {
-  const providerUrl = process.env.IMAGE_PROVIDER_URL;
-  const providerApiKey = process.env.IMAGE_PROVIDER_API_KEY;
-  const statusUrl = process.env.IMAGE_PROVIDER_STATUS_URL;
-
-  if (!providerUrl || !providerApiKey || !jobId) {
-    return {
-      ok: false,
-      status: 503,
-      message: 'لم يتم تهيئة مزود الصور في الخادم. أضف متغيرات البيئة المطلوبة.',
-    };
-  }
-
-  let statusEndpoint = statusUrl || providerUrl;
-
-  if (statusEndpoint.includes('{jobId}')) {
-    statusEndpoint = statusEndpoint.replace('{jobId}', encodeURIComponent(jobId));
-  } else if (statusEndpoint.includes('/jobs')) {
-    statusEndpoint = `${statusEndpoint.replace(/\/$/, '')}/${encodeURIComponent(jobId)}`;
-  } else if (statusEndpoint.includes('?')) {
-    statusEndpoint = `${statusEndpoint}&jobId=${encodeURIComponent(jobId)}`;
-  } else {
-    statusEndpoint = `${statusEndpoint}?jobId=${encodeURIComponent(jobId)}`;
-  }
-
-  const response = await fetch(statusEndpoint, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${providerApiKey}`,
-    },
-  });
-
-  if (!response.ok) {
-    return {
-      ok: false,
-      status: response.status || 500,
-      message: 'تعذر التحقق من حالة الصورة. حاول مرة أخرى.',
-    };
-  }
-
-  const data = await response.json();
-  const imageUrl = data.imageUrl || data.url || data.outputUrl || data.result?.imageUrl || null;
-  const status = data.status || (imageUrl ? 'completed' : 'pending');
-
-  if (status === 'completed' || imageUrl) {
     return {
       ok: true,
       status: 200,
       imageUrl,
-      jobId,
-      resultStatus: 'completed',
+      jobId: null,
     };
-  }
+  } catch (error) {
+    const errorMessage = error?.message || 'حدث خطأ أثناء الاتصال بخدمة AI Gateway.';
+    const lower = String(errorMessage).toLowerCase();
 
-  if (status === 'failed' || data.error) {
+    if (lower.includes('401') || lower.includes('unauthorized') || lower.includes('forbidden')) {
+      return {
+        ok: false,
+        status: 401,
+        message: 'مفتاح AI Gateway غير صالح أو غير مصرح به.',
+      };
+    }
+
+    if (lower.includes('402') || lower.includes('payment')) {
+      return {
+        ok: false,
+        status: 402,
+        message: 'حساب AI Gateway غير مفعّل أو غير مدفوع.',
+      };
+    }
+
+    if (lower.includes('429') || lower.includes('rate limit')) {
+      return {
+        ok: false,
+        status: 429,
+        message: 'تم تجاوز الحد المسموح من الطلبات. حاول لاحقًا.',
+      };
+    }
+
+    if (lower.includes('400') || lower.includes('bad request')) {
+      return {
+        ok: false,
+        status: 400,
+        message: 'طلب الصورة غير صالح أو نص / إعداد غير مدعوم.',
+      };
+    }
+
     return {
       ok: false,
-      status: 400,
-      message: 'تعذر إنشاء الصورة حاليًا، حاول مرة أخرى.',
+      status: 500,
+      message: errorMessage,
     };
   }
+}
 
+export async function getImageJobStatus() {
   return {
-    ok: true,
-    status: 202,
-    jobId,
-    resultStatus: 'pending',
+    ok: false,
+    status: 501,
+    message: 'لم تعد عمليات التحقق بالاستقصاء مطلوبة مع AI Gateway؛ التوليد يحدث مباشرةً.',
   };
 }
