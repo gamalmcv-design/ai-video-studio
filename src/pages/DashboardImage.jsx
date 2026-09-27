@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { generateImage } from '../services/imageGenerator';
 
 const imageModels = [
-  { value: 'Seedream v5.0 Lite', badge: '✨ جودة عالية وسعر اقتصادي' },
+  { value: 'Seedream 5.0 Pro', badge: '✨ جودة عالية وسعر اقتصادي' },
 ];
 const imageSizes = ['1:1', '9:16', '16:9', '4:5', '3:4'];
 const imageQualities = ['480p', '720p', '1080p', '4K'];
 
 function DashboardImagePage() {
   const [generationMode, setGenerationMode] = useState('image');
-  const [selectedModel, setSelectedModel] = useState('Seedream v5.0 Lite');
+  const [selectedModel, setSelectedModel] = useState('Seedream 5.0 Pro');
   const [selectedSize, setSelectedSize] = useState('1:1');
   const [selectedQuality, setSelectedQuality] = useState('1080p');
   const [referenceImage, setReferenceImage] = useState(null);

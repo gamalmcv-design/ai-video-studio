@@ -1,7 +1,7 @@
 import { generateImage as aiGenerateImage } from 'ai';
 
 const imageModelMap = {
-  'Seedream v5.0 Lite': 'bytedance/seedream-5.0-lite',
+  'Seedream 5.0 Pro': 'bytedance/seedream-5.0-pro',
 };
 
 function ensureSupportedModel(modelName) {
@@ -102,7 +102,7 @@ export async function createImageGeneration(payload = {}) {
       };
     }
 
-    console.info('Calling Vercel AI Gateway for image generation with model bytedance/seedream-5.0-lite');
+    console.info('Calling Vercel AI Gateway for image generation with model bytedance/seedream-5.0-pro');
 
     const result = await aiGenerateImage({
       model: resolveModelId(normalized.model),
