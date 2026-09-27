@@ -43,8 +43,6 @@ export async function generateImage(payload = {}) {
     description,
     mode,
     model,
-    aspectRatio,
-    quality,
     referenceImage,
   } = payload;
 
@@ -66,10 +64,10 @@ export async function generateImage(payload = {}) {
     };
   }
 
-  if (!aspectRatio || !quality) {
+  if (!prompt) {
     return {
       status: 'error',
-      error: 'يرجى إكمال إعدادات الصورة.',
+      error: 'يرجى كتابة وصف الصورة.',
       result: null,
     };
   }
@@ -84,8 +82,6 @@ export async function generateImage(payload = {}) {
         prompt,
         mode: mode || 'image',
         model,
-        aspectRatio,
-        quality,
         referenceImage,
       }),
     });
@@ -107,8 +103,9 @@ export async function generateImage(payload = {}) {
       };
     }
 
-    if (data?.jobId) {
-      return pollImageJob(data.jobId);
+    const requestId = data?.jobId || data?.requestId || null;
+    if (requestId) {
+      return pollImageJob(requestId);
     }
 
     return {

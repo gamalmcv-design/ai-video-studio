@@ -1,22 +1,7 @@
-import { generateImage } from 'ai';
+import { generateImage as aiGenerateImage } from 'ai';
 
 const imageModelMap = {
   'Seedream v5.0 Lite': 'bytedance/seedream-5.0-lite',
-};
-
-const aspectRatioMap = {
-  '1:1': '1024x1024',
-  '9:16': '768x1152',
-  '16:9': '1152x768',
-  '4:5': '1024x1280',
-  '3:4': '1024x1280',
-};
-
-const supportedQualityMap = {
-  '480p': '1024x1024',
-  '720p': '1024x1024',
-  '1080p': '1024x1024',
-  '4K': '1536x1536',
 };
 
 function ensureSupportedModel(modelName) {
@@ -25,17 +10,6 @@ function ensureSupportedModel(modelName) {
   }
 
   return modelName;
-}
-
-function resolveImageSize(aspectRatio, quality) {
-  const explicitSize = aspectRatioMap[aspectRatio] || aspectRatioMap['1:1'];
-  const qualitySize = supportedQualityMap[quality] || explicitSize;
-
-  if (quality === '4K') {
-    return qualitySize;
-  }
-
-  return explicitSize || qualitySize;
 }
 
 function toDataUrlFromImage(imageLike) {
@@ -78,10 +52,8 @@ function toDataUrlFromImage(imageLike) {
 
 export function validateImageRequest(payload = {}) {
   const mode = payload.mode || 'image';
-  const prompt = (payload.prompt ?? payload.description ?? '').trim();
+  const prompt = String(payload.prompt ?? payload.description ?? '').trim();
   const modelName = ensureSupportedModel(payload.model);
-  const aspectRatio = payload.aspectRatio;
-  const quality = payload.quality;
 
   if (!modelName) {
     throw new Error('يرجى اختيار موديل.');
@@ -95,19 +67,14 @@ export function validateImageRequest(payload = {}) {
     throw new Error('يرجى كتابة وصف الصورة.');
   }
 
-  if (aspectRatio && !aspectRatioMap[aspectRatio]) {
-    throw new Error('هذا المقاس غير متاح لهذا الموديل.');
-  }
-
-  if (!quality || !supportedQualityMap[quality]) {
-    throw new Error('هذه الجودة غير مدعومة لهذا الموديل.');
+  if (!prompt) {
+    throw new Error('يرجى كتابة وصف الصورة.');
   }
 
   return {
     model: modelName,
     mode,
-    prompt: prompt || '',
-    size: resolveImageSize(aspectRatio, quality),
+    prompt,
     referenceImage: payload.referenceImage || null,
   };
 }
@@ -135,15 +102,11 @@ export async function createImageGeneration(payload = {}) {
       };
     }
 
-    const result = await generateImage({
+    console.info('Calling Vercel AI Gateway for image generation with model bytedance/seedream-5.0-lite');
+
+    const result = await aiGenerateImage({
       model: resolveModelId(normalized.model),
       prompt: normalized.prompt,
-      size: normalized.size,
-      providerOptions: {
-        gateway: {
-          apiKey,
-        },
-      },
     });
 
     const imageData = result?.image || result?.output?.image || null;
@@ -164,6 +127,8 @@ export async function createImageGeneration(payload = {}) {
       jobId: null,
     };
   } catch (error) {
+    console.error('AI Gateway image generation failed:', error);
+
     const errorMessage = error?.message || 'حدث خطأ أثناء الاتصال بخدمة AI Gateway.';
     const lower = String(errorMessage).toLowerCase();
 
@@ -195,7 +160,7 @@ export async function createImageGeneration(payload = {}) {
       return {
         ok: false,
         status: 400,
-        message: 'طلب الصورة غير صالح أو نص / إعداد غير مدعوم.',
+        message: errorMessage,
       };
     }
 
