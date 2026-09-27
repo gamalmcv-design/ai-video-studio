@@ -1,6 +1,5 @@
 const imageModelMap = {
-  'Seedream 4.5': process.env.IMAGE_MODEL_SEEDREAM_45 || '',
-  'Seedream 4.0': process.env.IMAGE_MODEL_SEEDREAM_40 || '',
+  'Seedream v5.0 Lite': process.env.IMAGE_MODEL_SEEDREAM_5_LITE || 'seedream-5-lite',
 };
 
 const aspectRatioMap = {
@@ -26,9 +25,9 @@ function ensureSupportedModel(modelName) {
   return modelName;
 }
 
-export function validateImageRequest(payload) {
+export function validateImageRequest(payload = {}) {
   const mode = payload.mode || 'image';
-  const prompt = (payload.prompt || '').trim();
+  const prompt = (payload.prompt ?? payload.description ?? '').trim();
   const modelName = ensureSupportedModel(payload.model);
   const aspectRatio = payload.aspectRatio;
   const quality = payload.quality;
@@ -73,7 +72,7 @@ export function resolveModelId(modelName) {
   return modelId;
 }
 
-export async function createImageGeneration(payload) {
+export async function createImageGeneration(payload = {}) {
   try {
     const normalized = validateImageRequest(payload);
     const providerUrl = process.env.IMAGE_PROVIDER_URL;

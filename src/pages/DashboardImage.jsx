@@ -2,15 +2,14 @@ import React, { useState } from 'react';
 import { generateImage } from '../services/imageGenerator';
 
 const imageModels = [
-  { value: 'GPT Image 2.5', badge: 'احترافي' },
-  { value: 'Nano Banana Pro', badge: 'استوديو' },
+  { value: 'Seedream v5.0 Lite', badge: '✨ جودة عالية وسعر اقتصادي' },
 ];
 const imageSizes = ['1:1', '9:16', '16:9', '4:5', '3:4'];
 const imageQualities = ['480p', '720p', '1080p', '4K'];
 
 function DashboardImagePage() {
   const [generationMode, setGenerationMode] = useState('image');
-  const [selectedModel, setSelectedModel] = useState('GPT Image 2.5');
+  const [selectedModel, setSelectedModel] = useState('Seedream v5.0 Lite');
   const [selectedSize, setSelectedSize] = useState('1:1');
   const [selectedQuality, setSelectedQuality] = useState('1080p');
   const [referenceImage, setReferenceImage] = useState(null);
