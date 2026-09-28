@@ -4,6 +4,49 @@ const imageModelMap = {
   'Seedream 5.0 Pro': 'bytedance/seedream-5.0-pro',
 };
 
+const supportedAspectRatios = new Set(['16:9', '9:16', '1:1', '3:4', '4:5']);
+const supportedQualities = new Set(['1K', '1.5K', '2K']);
+const qualitySizeMap = {
+  '1K': {
+    '16:9': '1280x720',
+    '9:16': '720x1280',
+    '1:1': '1024x1024',
+    '3:4': '1024x1366',
+    '4:5': '1024x1280',
+  },
+  '1.5K': {
+    '16:9': '1536x864',
+    '9:16': '864x1536',
+    '1:1': '1536x1536',
+    '3:4': '1368x1824',
+    '4:5': '1440x1800',
+  },
+  '2K': {
+    '16:9': '2048x1152',
+    '9:16': '1152x2048',
+    '1:1': '2048x2048',
+    '3:4': '1536x2048',
+    '4:5': '1638x2048',
+  },
+};
+
+function resolveExactSize(quality, aspectRatio) {
+  if (!supportedQualities.has(quality)) {
+    throw new Error('مستوى الجودة المختار غير مدعوم حاليًا بواسطة Seedream 5.0 Pro.');
+  }
+
+  if (!supportedAspectRatios.has(aspectRatio)) {
+    throw new Error('نسبة الصورة المختارة غير مدعومة حاليًا بواسطة Seedream 5.0 Pro.');
+  }
+
+  const exactSize = qualitySizeMap[quality]?.[aspectRatio];
+  if (!exactSize) {
+    throw new Error('هذا المزيج بين الجودة والنسبة غير مدعوم حاليًا بواسطة Seedream 5.0 Pro.');
+  }
+
+  return exactSize;
+}
+
 function ensureSupportedModel(modelName) {
   if (!modelName || !imageModelMap[modelName]) {
     throw new Error('يرجى اختيار موديل صالح.');
@@ -71,11 +114,32 @@ export function validateImageRequest(payload = {}) {
     throw new Error('يرجى كتابة وصف الصورة.');
   }
 
+  const aspectRatio = typeof payload.aspectRatio === 'string' ? payload.aspectRatio.trim() : undefined;
+  const quality = typeof payload.quality === 'string' ? payload.quality.trim() : undefined;
+  const sizeFromPayload = typeof payload.size === 'string' ? payload.size.trim() : undefined;
+
+  if (aspectRatio && !supportedAspectRatios.has(aspectRatio)) {
+    throw new Error('نسبة الصورة المختارة غير مدعومة في هذا النموذج.');
+  }
+
+  if (quality && !supportedQualities.has(quality)) {
+    throw new Error('مستوى الجودة المختار غير مدعوم حاليًا بواسطة Seedream 5.0 Pro.');
+  }
+
+  const resolvedSize = quality && aspectRatio ? resolveExactSize(quality, aspectRatio) : sizeFromPayload;
+
+  if (resolvedSize && !/^\d+x\d+$/.test(resolvedSize)) {
+    throw new Error('حجم الصورة غير مدعوم في هذا النموذج.');
+  }
+
   return {
     model: modelName,
     mode,
     prompt,
     referenceImage: payload.referenceImage || null,
+    aspectRatio,
+    quality,
+    size: resolvedSize || sizeFromPayload || null,
   };
 }
 
@@ -102,12 +166,27 @@ export async function createImageGeneration(payload = {}) {
       };
     }
 
-    console.info('Calling Vercel AI Gateway for image generation with model bytedance/seedream-5.0-pro');
+    console.info('Image generation config', {
+      model: resolveModelId(normalized.model),
+      aspectRatio: normalized.aspectRatio,
+      quality: normalized.quality,
+      size: normalized.size,
+    });
 
-    const result = await aiGenerateImage({
+    const generationOptions = {
       model: resolveModelId(normalized.model),
       prompt: normalized.prompt,
-    });
+    };
+
+    if (normalized.aspectRatio) {
+      generationOptions.aspectRatio = normalized.aspectRatio;
+    }
+
+    if (normalized.size) {
+      generationOptions.size = normalized.size;
+    }
+
+    const result = await aiGenerateImage(generationOptions);
 
     const imageData = result?.image || result?.output?.image || null;
     const imageUrl = toDataUrlFromImage(imageData);

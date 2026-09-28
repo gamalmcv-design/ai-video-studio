@@ -44,6 +44,9 @@ export async function generateImage(payload = {}) {
     mode,
     model,
     referenceImage,
+    aspectRatio,
+    size,
+    quality,
   } = payload;
 
   const prompt = (description || '').trim();
@@ -83,6 +86,9 @@ export async function generateImage(payload = {}) {
         mode: mode || 'image',
         model,
         referenceImage,
+        ...(aspectRatio ? { aspectRatio } : {}),
+        ...(size ? { size } : {}),
+        ...(quality ? { quality } : {}),
       }),
     });
 

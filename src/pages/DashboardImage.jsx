@@ -4,14 +4,38 @@ import { generateImage } from '../services/imageGenerator';
 const imageModels = [
   { value: 'Seedream 5.0 Pro', badge: '✨ جودة عالية وسعر اقتصادي' },
 ];
-const imageSizes = ['1:1', '9:16', '16:9', '4:5', '3:4'];
-const imageQualities = ['480p', '720p', '1080p', '4K'];
+const imageSizes = ['16:9', '9:16', '1:1', '3:4', '4:5'];
+const imageQualities = ['1K', '1.5K', '2K'];
+
+const imageQualityMap = {
+  '1K': {
+    '16:9': '1280x720',
+    '9:16': '720x1280',
+    '1:1': '1024x1024',
+    '3:4': '1024x1366',
+    '4:5': '1024x1280',
+  },
+  '1.5K': {
+    '16:9': '1536x864',
+    '9:16': '864x1536',
+    '1:1': '1536x1536',
+    '3:4': '1368x1824',
+    '4:5': '1440x1800',
+  },
+  '2K': {
+    '16:9': '2048x1152',
+    '9:16': '1152x2048',
+    '1:1': '2048x2048',
+    '3:4': '1536x2048',
+    '4:5': '1638x2048',
+  },
+};
 
 function DashboardImagePage() {
   const [generationMode, setGenerationMode] = useState('image');
   const [selectedModel, setSelectedModel] = useState('Seedream 5.0 Pro');
   const [selectedSize, setSelectedSize] = useState('1:1');
-  const [selectedQuality, setSelectedQuality] = useState('1080p');
+  const [selectedQuality, setSelectedQuality] = useState('1.5K');
   const [referenceImage, setReferenceImage] = useState(null);
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState('idle');
@@ -37,10 +61,18 @@ function DashboardImagePage() {
     setErrorMessage('');
   };
 
+  const resolvedImageSize = imageQualityMap[selectedQuality]?.[selectedSize] || null;
+
   const handleGenerate = async () => {
     if (!canGenerate) {
       setStatus('error');
       setErrorMessage('يرجى كتابة وصف الصورة أو رفع صورة مرجعية.');
+      return;
+    }
+
+    if (!resolvedImageSize) {
+      setStatus('error');
+      setErrorMessage('هذا الإعداد غير مدعوم حاليًا بواسطة Seedream 5.0 Pro.');
       return;
     }
 
@@ -54,6 +86,7 @@ function DashboardImagePage() {
       description,
       aspectRatio: selectedSize,
       quality: selectedQuality,
+      size: resolvedImageSize,
       referenceImage,
     });
 
@@ -244,24 +277,40 @@ function DashboardImagePage() {
           <div className="result-box" aria-live="polite">
             <div className="result-box-head">
               <div className="result-box-title">الصورة الناتجة</div>
+              <div className="result-meta">
+                <span>{selectedSize}</span>
+                <span>•</span>
+                <span>{selectedQuality}</span>
+                <span>•</span>
+                <span>Seedream 5.0 Pro</span>
+              </div>
             </div>
 
             {status === 'generating' && (
-              <div className="result-loading">
+              <div className="result-stage result-stage-loading" style={{ aspectRatio: selectedSize.replace(':', ' / ') }}>
                 <span className="loading-orb" />
                 <span>جاري إنشاء الصورة...</span>
               </div>
             )}
 
             {!resultImage && status !== 'generating' && !errorMessage && (
-              <div className="result-empty">ستظهر الصورة هنا بعد الإنشاء</div>
+              <div className="result-stage result-stage-empty" style={{ aspectRatio: selectedSize.replace(':', ' / ') }}>
+                <div>
+                  <div className="result-stage-label">مساحة استلام الصورة</div>
+                  <div className="result-stage-subtitle">ستظهر النتيجة هنا بالحجم والنسبة المحددين</div>
+                </div>
+              </div>
             )}
 
-            {errorMessage && !resultImage && <div className="result-error">{errorMessage}</div>}
+            {errorMessage && !resultImage && (
+              <div className="result-stage result-stage-error" style={{ aspectRatio: selectedSize.replace(':', ' / ') }}>
+                {errorMessage}
+              </div>
+            )}
 
             {resultImage && (
               <>
-                <div className="result-image-wrap">
+                <div className="result-stage result-stage-image" style={{ aspectRatio: selectedSize.replace(':', ' / ') }}>
                   <img src={resultImage} alt="نتيجة توليد الصورة" />
                 </div>
                 <div className="result-actions">
