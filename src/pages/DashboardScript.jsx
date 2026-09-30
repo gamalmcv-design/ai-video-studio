@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { generateScript } from '../services/scriptGenerator';
+import { saveStudioTask } from '../services/studioLibrary';
 
 const contentTypes = [
   '🎬 سيناريو فيديو',
@@ -53,11 +54,40 @@ function DashboardScriptPage() {
     if (response.status === 'success') {
       setResult(response.result);
       setStatus('completed');
+      saveStudioTask({
+        type: 'script',
+        title: response.result?.title || 'سكريبت جديد',
+        status: 'completed',
+        payload: { idea: cleanIdea, type: selectedType, duration, style, language, detailLevel },
+        result: response.result,
+      });
       return;
     }
 
     setStatus('error');
     setErrorMessage(response.error || 'تعذر إنشاء السكريبت حاليًا، حاول مرة أخرى.');
+    saveStudioTask({
+      type: 'script',
+      title: cleanIdea.slice(0, 80) || 'سكريبت جديد',
+      status: 'failed',
+      payload: { idea: cleanIdea, type: selectedType, duration, style, language, detailLevel },
+      error: response.error || null,
+    });
+  };
+
+  const handleUseInVideo = () => {
+    if (!result) return;
+    const scriptText = [
+      result.title,
+      result.hook,
+      ...(result.scenes || []),
+      result.voiceover,
+      result.ending,
+      result.cta,
+    ].filter(Boolean).join('\n\n');
+    sessionStorage.setItem('asharqawi-video-prompt', scriptText);
+    window.history.pushState({}, '', '/dashboard/video');
+    window.dispatchEvent(new PopStateEvent('popstate'));
   };
 
   const handleCopy = async () => {
@@ -315,6 +345,9 @@ function DashboardScriptPage() {
               </div>
 
               <div className="result-actions">
+                <button type="button" className="mini-action-btn gold-btn" onClick={handleUseInVideo}>
+                  استخدمه في الفيديو
+                </button>
                 <button type="button" className="mini-action-btn gold-btn" onClick={handleCopy}>
                   نسخ
                 </button>

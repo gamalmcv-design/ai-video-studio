@@ -16,6 +16,7 @@ export default async function handler(req, res) {
         ok: true,
         imageUrl: result.imageUrl || null,
         jobId: result.jobId || null,
+        requestId: result.jobId || null,
       });
     } catch (error) {
       return res.status(500).json({
@@ -26,9 +27,10 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    const { jobId } = req.query;
+    const { jobId, requestId } = req.query;
+    const resolvedId = jobId || requestId;
 
-    if (!jobId) {
+    if (!resolvedId) {
       return res.status(400).json({
         ok: false,
         message: 'معرّف المهمة غير موجود.',
@@ -36,7 +38,7 @@ export default async function handler(req, res) {
     }
 
     try {
-      const result = await getImageJobStatus(jobId);
+      const result = await getImageJobStatus(resolvedId);
 
       if (!result.ok) {
         return res.status(result.status || 500).json({
@@ -49,7 +51,8 @@ export default async function handler(req, res) {
         ok: true,
         resultStatus: result.resultStatus || 'pending',
         imageUrl: result.imageUrl || null,
-        jobId: result.jobId || jobId,
+        jobId: result.jobId || resolvedId,
+        requestId: result.jobId || resolvedId,
       });
     } catch (error) {
       return res.status(500).json({

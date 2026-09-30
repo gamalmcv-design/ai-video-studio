@@ -2,14 +2,53 @@ import express from 'express';
 import { createImageGeneration, getImageJobStatus } from './imageService.js';
 import { createScriptGeneration } from './scriptService.js';
 import { createVideoGeneration } from './videoService.js';
+import { createMusicGeneration, createVoiceGeneration, getAudioProviderStatuses, getConfiguredVoiceOptions } from './audioService.js';
+import { createVideoComposition } from './videoComposerService.js';
 
 const app = express();
-const PORT = 3001;
+const PORT = Number(process.env.PORT || 3001);
 
 app.use(express.json({ limit: '20mb' }));
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, status: 'healthy' });
+});
+
+app.get('/api/settings', (_req, res) => {
+  res.json({
+    ok: true,
+    providers: {
+      image: process.env.AI_GATEWAY_API_KEY ? 'Connected' : 'Not configured',
+      video: process.env.VIDEO_PROVIDER_URL && process.env.VIDEO_PROVIDER_API_KEY ? 'Connected' : 'Not configured',
+      script: process.env.SCRIPT_PROVIDER_URL && process.env.SCRIPT_PROVIDER_API_KEY && process.env.SCRIPT_MODEL_ID ? 'Connected' : 'Not configured',
+      ...getAudioProviderStatuses(),
+    },
+    voiceOptions: getConfiguredVoiceOptions(),
+    models: {
+      image: ['Seedream 5.0 Pro'],
+      video: ['Seedance 2.5', 'Seedance 2.0'],
+      script: ['النموذج المهيأ على الخادم'],
+    },
+    defaults: {
+      image: { aspectRatio: '1:1', quality: '1.5K' },
+      video: { duration: '15s', aspectRatio: '9:16', quality: '720p' },
+    },
+  });
+});
+
+app.post('/api/voice', async (req, res) => {
+  const result = await createVoiceGeneration(req.body || {});
+  res.status(result.status || 500).json(result);
+});
+
+app.post('/api/music', async (req, res) => {
+  const result = await createMusicGeneration(req.body || {});
+  res.status(result.status || 500).json(result);
+});
+
+app.post('/api/compose', async (req, res) => {
+  const result = await createVideoComposition(req.body || {});
+  res.status(result.status || 500).json(result);
 });
 
 app.post('/api/image', async (req, res) => {

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import DashboardImagePage from './pages/DashboardImage';
+import DashboardLibraryPage from './pages/DashboardLibrary';
 import DashboardScriptPage from './pages/DashboardScript';
 import DashboardVideoPage from './pages/DashboardVideo';
 
@@ -24,6 +25,13 @@ const toolCards = [
     route: '/dashboard/script',
     accent: 'gold',
     label: 'Script',
+  },
+  {
+    title: 'المواد والمشاريع',
+    icon: '▤',
+    route: '/dashboard/library',
+    accent: 'cyan',
+    label: 'Studio',
   },
 ];
 
@@ -51,6 +59,10 @@ function App() {
 
   if (currentPath === '/dashboard/script' || currentPath.startsWith('/dashboard/script')) {
     return <DashboardScriptPage />;
+  }
+
+  if (currentPath === '/dashboard/library' || currentPath.startsWith('/dashboard/library')) {
+    return <DashboardLibraryPage />;
   }
 
   return (

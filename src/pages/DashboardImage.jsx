@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { generateImage } from '../services/imageGenerator';
+import { getStudioAsset, saveStudioAsset, saveStudioTask } from '../services/studioLibrary';
 
 const imageModels = [
   { value: 'Seedream 5.0 Pro', badge: '✨ جودة عالية وسعر اقتصادي' },
 ];
 const imageSizes = ['16:9', '9:16', '1:1', '3:4', '4:5'];
 const imageQualities = ['1K', '1.5K', '2K'];
+const MAX_IMAGE_REFERENCE_BYTES = 3 * 1024 * 1024;
 
 const imageQualityMap = {
   '1K': {
@@ -42,6 +44,23 @@ function DashboardImagePage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [resultImage, setResultImage] = useState(null);
 
+  useEffect(() => {
+    const assetId = sessionStorage.getItem('asharqawi-selected-image-asset');
+    if (!assetId) return;
+    sessionStorage.removeItem('asharqawi-selected-image-asset');
+    getStudioAsset(assetId).then((asset) => {
+      if (!asset?.blob) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setReferenceImage(reader.result);
+          setGenerationMode('image');
+        }
+      };
+      reader.readAsDataURL(asset.blob);
+    }).catch(() => setErrorMessage('تعذر فتح المادة من المكتبة.'));
+  }, []);
+
   const canGenerate =
     generationMode === 'image'
       ? Boolean(referenceImage || description.trim())
@@ -50,10 +69,31 @@ function DashboardImagePage() {
   const handleImageUpload = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const previewUrl = URL.createObjectURL(file);
-    setReferenceImage(previewUrl);
-    setStatus('idle');
-    setErrorMessage('');
+    if (!file.type.startsWith('image/') || file.size > MAX_IMAGE_REFERENCE_BYTES) {
+      setStatus('error');
+      setErrorMessage('ارفع صورة صالحة لا يتجاوز حجمها 3 ميجابايت لضمان إرسالها إلى خدمة التوليد.');
+      event.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const imageDataUrl = typeof reader.result === 'string' ? reader.result : null;
+      if (!imageDataUrl) {
+        setStatus('error');
+        setErrorMessage('تعذر قراءة الصورة المرجعية.');
+        return;
+      }
+
+      setReferenceImage(imageDataUrl);
+      setStatus('idle');
+      setErrorMessage('');
+    };
+    reader.onerror = () => {
+      setStatus('error');
+      setErrorMessage('تعذر قراءة الصورة المرجعية.');
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleRemoveImage = () => {
@@ -91,13 +131,35 @@ function DashboardImagePage() {
     });
 
     if (response.status === 'success') {
-      setResultImage(response.result?.imageUrl || null);
+      const imageUrl = response.result?.imageUrl || null;
+      setResultImage(imageUrl);
       setStatus('completed');
+      const asset = imageUrl
+        ? await saveStudioAsset(imageUrl, {
+            name: `asharqawi-image-${Date.now()}.png`,
+            type: 'image',
+            allowGeneratedImage: true,
+          }).catch(() => null)
+        : null;
+      saveStudioTask({
+        type: 'image',
+        title: description.slice(0, 80) || 'صورة مولدة',
+        status: 'completed',
+        payload: { description, model: selectedModel, aspectRatio: selectedSize, quality: selectedQuality },
+        result: { assetId: asset?.id || null },
+      });
       return;
     }
 
     setStatus('error');
     setErrorMessage(response.error || 'تعذر إنشاء الصورة حاليًا، حاول مرة أخرى.');
+    saveStudioTask({
+      type: 'image',
+      title: description.slice(0, 80) || 'صورة مولدة',
+      status: 'failed',
+      payload: { description, model: selectedModel, aspectRatio: selectedSize, quality: selectedQuality },
+      error: response.error || null,
+    });
   };
 
   const handleDownloadImage = () => {

@@ -97,12 +97,13 @@ export function validateImageRequest(payload = {}) {
   const mode = payload.mode || 'image';
   const prompt = String(payload.prompt ?? payload.description ?? '').trim();
   const modelName = ensureSupportedModel(payload.model);
+  const referenceImage = typeof payload.referenceImage === 'string' ? payload.referenceImage.trim() || null : null;
 
   if (!modelName) {
     throw new Error('يرجى اختيار موديل.');
   }
 
-  if (mode === 'image' && !payload.referenceImage && !prompt) {
+  if (mode === 'image' && !referenceImage && !prompt) {
     throw new Error('يرجى كتابة وصف الصورة.');
   }
 
@@ -110,7 +111,7 @@ export function validateImageRequest(payload = {}) {
     throw new Error('يرجى كتابة وصف الصورة.');
   }
 
-  if (!prompt) {
+  if (!prompt && !referenceImage) {
     throw new Error('يرجى كتابة وصف الصورة.');
   }
 
@@ -136,7 +137,7 @@ export function validateImageRequest(payload = {}) {
     model: modelName,
     mode,
     prompt,
-    referenceImage: payload.referenceImage || null,
+    referenceImage,
     aspectRatio,
     quality,
     size: resolvedSize || sizeFromPayload || null,
@@ -175,7 +176,12 @@ export async function createImageGeneration(payload = {}) {
 
     const generationOptions = {
       model: resolveModelId(normalized.model),
-      prompt: normalized.prompt,
+      prompt: normalized.referenceImage
+        ? {
+            text: normalized.prompt,
+            images: [normalized.referenceImage],
+          }
+        : normalized.prompt,
     };
 
     if (normalized.aspectRatio) {

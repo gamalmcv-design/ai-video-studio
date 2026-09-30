@@ -4,6 +4,15 @@ const modelMap = {
   'سباداتيس 2.0': process.env.VIDEO_MODEL_SPADATIS_20 || '',
 };
 
+function isHttpUrl(value) {
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 const allowedAspectRatios = {
   '9:16': '9:16',
   '16:9': '16:9',
@@ -67,6 +76,31 @@ function buildStatusUrl(baseUrl, requestId) {
   return `${normalized}/${encodeURIComponent(requestId)}`;
 }
 
+function safeErrorMessage(data) {
+  const raw =
+    data?.message ||
+    data?.error ||
+    data?.detail ||
+    data?.error?.message ||
+    data?.title ||
+    data?.description ||
+    data?.statusText ||
+    'تعذر إنشاء الفيديو حاليًا.';
+
+  if (typeof raw === 'string') {
+    return raw.replace(/\s+/g, ' ').trim().replace(/(api[-_ ]?key|authorization|token)(\s*[:=]\s*)[^\s,;]+/gi, '$1$2[redacted]');
+  }
+
+  if (raw && typeof raw === 'object') {
+    const nested = raw.message || raw.error || raw.detail || raw.title || raw.description;
+    return typeof nested === 'string'
+      ? nested.replace(/\s+/g, ' ').trim().replace(/(api[-_ ]?key|authorization|token)(\s*[:=]\s*)[^\s,;]+/gi, '$1$2[redacted]')
+      : 'تعذر إنشاء الفيديو حاليًا.';
+  }
+
+  return 'تعذر إنشاء الفيديو حاليًا.';
+}
+
 function extractErrorMessage(status, data) {
   if (status === 400) return 'طلب غير صالح في مزود الفيديو.';
   if (status === 401) return 'غير مصرح للوصول إلى مزود الفيديو.';
@@ -75,8 +109,7 @@ function extractErrorMessage(status, data) {
   if (status === 429) return 'تم تجاوز حد الطلبات. حاول لاحقًا.';
   if (status === 500) return 'خطأ في مزود الفيديو. حاول مرة أخرى.';
 
-  const message = data?.message || data?.error || data?.detail || data?.error?.message || 'تعذر إنشاء الفيديو حاليًا.';
-  return typeof message === 'string' ? message : 'تعذر إنشاء الفيديو حاليًا.';
+  return safeErrorMessage(data);
 }
 
 export function validateVideoRequest(payload) {
@@ -145,11 +178,12 @@ async function pollVideoStatus(statusUrl, requestId, providerApiKey, maxAttempts
 
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
+      const safeMessage = safeErrorMessage(data);
       return {
         ok: false,
         status: response.status || 500,
-        message: extractErrorMessage(response.status, data),
-        developerMessage: data?.error || 'Video status polling failed',
+        message: `Pixazo HTTP status: ${response.status || 500}\nPixazo error: ${safeMessage}`,
+        developerMessage: safeMessage,
       };
     }
 
@@ -175,6 +209,15 @@ async function pollVideoStatus(statusUrl, requestId, providerApiKey, maxAttempts
         };
       }
 
+      if (!isHttpUrl(mediaUrl)) {
+        return {
+          ok: false,
+          status: 502,
+          message: 'أعاد مزود الفيديو رابطًا غير صالح.',
+          developerMessage: 'Provider output URL must use HTTP or HTTPS.',
+        };
+      }
+
       return {
         ok: true,
         status: 200,
@@ -183,11 +226,12 @@ async function pollVideoStatus(statusUrl, requestId, providerApiKey, maxAttempts
     }
 
     if (status === 'FAILED' || status === 'ERROR') {
+      const safeMessage = safeErrorMessage(data);
       return {
         ok: false,
         status: 500,
-        message: 'تعذر إنشاء الفيديو في مزود الفيديو.',
-        developerMessage: data?.error || 'Video generation failed',
+        message: `Pixazo last status: ${status}\nPixazo error: ${safeMessage}`,
+        developerMessage: safeMessage,
       };
     }
 
@@ -209,6 +253,15 @@ async function pollVideoStatus(statusUrl, requestId, providerApiKey, maxAttempts
 
 export async function createVideoGeneration(payload) {
   const normalized = validateVideoRequest(payload);
+
+  if (normalized.referenceImage) {
+    return {
+      ok: false,
+      status: 422,
+      message: 'تكامل Seedance الحالي لا يرسل الصور المرجعية إلى المزود. استخدم وصفًا نصيًا أو أعد المحاولة بعد تهيئة دعم الصور من المزود.',
+      developerMessage: 'The configured provider adapter has no verified image-reference request contract.',
+    };
+  }
 
   const providerUrl = process.env.VIDEO_PROVIDER_URL;
   const providerApiKey = process.env.VIDEO_PROVIDER_API_KEY;
@@ -252,11 +305,12 @@ export async function createVideoGeneration(payload) {
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
+    const safeMessage = safeErrorMessage(data);
     return {
       ok: false,
       status: response.status || 500,
-      message: extractErrorMessage(response.status, data),
-      developerMessage: data?.error || 'Video provider request failed',
+      message: `Pixazo HTTP status: ${response.status || 500}\nPixazo error: ${safeMessage}`,
+      developerMessage: safeMessage,
     };
   }
 
@@ -271,6 +325,14 @@ export async function createVideoGeneration(payload) {
     null;
 
   if (directVideoUrl) {
+    if (!isHttpUrl(directVideoUrl)) {
+      return {
+        ok: false,
+        status: 502,
+        message: 'أعاد مزود الفيديو رابطًا غير صالح.',
+        developerMessage: 'Provider output URL must use HTTP or HTTPS.',
+      };
+    }
     return {
       ok: true,
       status: 200,
