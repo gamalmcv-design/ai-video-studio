@@ -1,5 +1,10 @@
 export async function generateVideo(payload = {}, onStatus = () => {}) {
   const { prompt, mode, model, duration, quality, aspectRatio } = payload;
+  const durationSeconds = Number(typeof duration === 'string' ? duration.replace(/s$/i, '') : duration);
+  const supportedDurations = new Set([4, 5, 6, 8, 10, 12, 15, 20, 25, 30]);
+  const supportedAspectRatios = new Set(['9:16', '16:9', '1:1']);
+  const supportedQualities = new Set(['480p', '720p']);
+  const referenceImage = payload.referenceImage || null;
 
   if (!prompt?.trim() && mode !== 'image') {
     return {
@@ -17,10 +22,18 @@ export async function generateVideo(payload = {}, onStatus = () => {}) {
     };
   }
 
-  if (!duration || !quality || !aspectRatio) {
+  if (!supportedDurations.has(durationSeconds) || !supportedQualities.has(quality) || !supportedAspectRatios.has(aspectRatio)) {
     return {
       status: 'error',
-      error: 'يرجى إكمال إعدادات الفيديو.',
+      error: 'المدة أو الجودة أو المقاس المختار غير مدعوم من إعداد Seedance الحالي.',
+      result: null,
+    };
+  }
+
+  if (referenceImage && (!/^data:image\/(?:jpeg|png|webp);base64,/.test(referenceImage) || referenceImage.length > 4 * 1024 * 1024 + 128)) {
+    return {
+      status: 'error',
+      error: 'الصورة المرجعية غير صالحة أو تتجاوز حد 3 ميجابايت.',
       result: null,
     };
   }
@@ -38,7 +51,7 @@ export async function generateVideo(payload = {}, onStatus = () => {}) {
         duration,
         quality,
         aspectRatio,
-        referenceImage: payload.referenceImage || null,
+        referenceImage,
       }),
     });
 

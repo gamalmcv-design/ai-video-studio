@@ -39,13 +39,14 @@ export default async function handler(req, res) {
       aspectRatio: result.aspectRatio,
     });
   } catch (error) {
+    const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
     console.log('[video-api-catch]', {
-      message: error?.message || 'Unknown error',
+      message: status === 400 ? error.message : 'Video generation failed',
     });
 
-    return res.status(500).json({
+    return res.status(status).json({
       ok: false,
-      message: 'حدث خطأ أثناء إنشاء الفيديو. حاول مرة أخرى.',
+      message: status === 400 ? error.message : 'حدث خطأ أثناء إنشاء الفيديو. حاول مرة أخرى.',
     });
   }
 }

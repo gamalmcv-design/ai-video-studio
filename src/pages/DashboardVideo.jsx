@@ -16,7 +16,7 @@ const videoDurations = [
 ];
 const videoQualities = ['480p', '720p'];
 const videoAspectRatios = ['9:16', '16:9', '1:1'];
-const MAX_VIDEO_REFERENCE_BYTES = 10 * 1024 * 1024;
+const MAX_VIDEO_REFERENCE_BYTES = 3 * 1024 * 1024;
 const musicStyles = [
   { value: 'none', label: 'بدون موسيقى' },
   { value: 'cinematic', label: 'سينمائية' },
@@ -123,14 +123,31 @@ function DashboardVideoPage() {
   const handleImageUpload = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/') || file.size > MAX_VIDEO_REFERENCE_BYTES) {
-      setErrorMessage('ارفع صورة صالحة لا يتجاوز حجمها 10 ميجابايت.');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > MAX_VIDEO_REFERENCE_BYTES) {
+      setErrorMessage('ارفع صورة PNG أو JPEG أو WebP لا يتجاوز حجمها 3 ميجابايت.');
       setStatus('error');
       event.target.value = '';
       return;
     }
-    setReferenceImage(URL.createObjectURL(file));
-    setErrorMessage('');
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== 'string' || !reader.result.startsWith(`data:${file.type};base64,`)) {
+        setErrorMessage('تعذر تجهيز الصورة المرجعية للإرسال.');
+        setStatus('error');
+        return;
+      }
+      setReferenceImage(reader.result);
+      setErrorMessage('');
+      setStatus('idle');
+      event.target.value = '';
+    };
+    reader.onerror = () => {
+      setErrorMessage('تعذر قراءة الصورة المرجعية.');
+      setStatus('error');
+      event.target.value = '';
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleRemoveImage = () => {
@@ -459,7 +476,7 @@ function DashboardVideoPage() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/png,image/jpeg,image/webp"
                     onChange={handleImageUpload}
                     style={{ display: 'none' }}
                   />
@@ -468,7 +485,7 @@ function DashboardVideoPage() {
                 <label className="upload-box">
                   <span className="upload-plus">＋</span>
                   <span>أضف صورة مرجعية</span>
-                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} />
+                  <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleImageUpload} />
                 </label>
               )}
             </div>
