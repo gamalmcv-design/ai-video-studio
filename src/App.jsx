@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import DashboardEditorPage from './pages/DashboardEditor';
 import DashboardImagePage from './pages/DashboardImage';
 import DashboardLibraryPage from './pages/DashboardLibrary';
 import DashboardScriptPage from './pages/DashboardScript';
@@ -33,6 +34,13 @@ const toolCards = [
     accent: 'cyan',
     label: 'Studio',
   },
+  {
+    title: 'المونتاج',
+    icon: '▰',
+    route: '/dashboard/editor',
+    accent: 'gold',
+    label: 'Editor',
+  },
 ];
 
 function App() {
@@ -63,6 +71,10 @@ function App() {
 
   if (currentPath === '/dashboard/library' || currentPath.startsWith('/dashboard/library')) {
     return <DashboardLibraryPage />;
+  }
+
+  if (currentPath === '/dashboard/editor' || currentPath.startsWith('/dashboard/editor')) {
+    return <DashboardEditorPage />;
   }
 
   return (
