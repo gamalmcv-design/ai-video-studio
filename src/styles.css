@@ -2020,6 +2020,234 @@ textarea::placeholder {
   text-align: center;
 }
 
+.editor-audio-add-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.28rem;
+}
+
+.editor-audio-add-actions .mini-action-btn {
+  min-height: 2rem;
+  font-size: 0.42rem;
+}
+
+.editor-audio-limits {
+  color: var(--muted);
+  font-size: 0.36rem;
+}
+
+.editor-audio-track-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.editor-audio-track-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.36rem;
+  min-width: 0;
+  padding: 0.42rem;
+  border: 1px solid rgba(209, 168, 91, 0.16);
+  border-radius: 0.58rem;
+  background: rgba(5, 7, 11, 0.38);
+}
+
+.editor-audio-track-card.selected {
+  border-color: rgba(110, 231, 255, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 255, 0.05);
+}
+
+.editor-audio-track-card > audio {
+  display: none;
+}
+
+.editor-audio-track-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.32rem;
+}
+
+.editor-audio-track-select {
+  display: flex;
+  align-items: center;
+  gap: 0.34rem;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  color: var(--text);
+  background: transparent;
+  text-align: right;
+  cursor: pointer;
+}
+
+.editor-audio-track-icon {
+  display: grid;
+  width: 1.6rem;
+  flex: 0 0 1.6rem;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 1px solid rgba(209, 168, 91, 0.2);
+  border-radius: 0.42rem;
+  color: var(--gold-strong);
+  background: rgba(209, 168, 91, 0.07);
+  font-size: 0.55rem;
+}
+
+.editor-audio-track-select > span:last-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.editor-audio-track-select strong {
+  color: var(--text);
+  font-size: 0.43rem;
+}
+
+.editor-audio-track-select small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.35rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-audio-track-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.13rem;
+}
+
+.editor-icon-button.muted {
+  color: #f2b9a6;
+  border-color: rgba(242, 185, 166, 0.22);
+}
+
+.editor-audio-volume {
+  display: grid;
+  grid-template-columns: auto minmax(3rem, 1fr) auto;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.36rem;
+}
+
+.editor-audio-volume input {
+  width: 100%;
+  min-width: 0;
+  accent-color: var(--gold);
+}
+
+.editor-audio-volume span {
+  min-width: 1.7rem;
+  color: var(--cyan-strong);
+  text-align: left;
+}
+
+.editor-audio-time-grid,
+.editor-audio-fades {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.28rem;
+}
+
+.editor-audio-time-grid label,
+.editor-audio-fades label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.13rem;
+  color: var(--muted);
+  font-size: 0.35rem;
+}
+
+.editor-audio-time-grid input,
+.editor-audio-fades input {
+  width: 100%;
+  min-height: 1.75rem;
+  padding: 0.22rem 0.32rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.38rem;
+  color: var(--text);
+  background: rgba(5, 7, 11, 0.68);
+  font: inherit;
+  font-size: 0.4rem;
+}
+
+.editor-audio-fades {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  align-items: end;
+}
+
+.editor-audio-fades > span {
+  max-width: 4.5rem;
+  padding-bottom: 0.35rem;
+  color: var(--muted);
+  font-size: 0.32rem;
+}
+
+.editor-audio-timeline-lane {
+  display: flex;
+  flex-direction: column;
+  gap: 0.24rem;
+}
+
+.editor-audio-lane-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.13rem;
+}
+
+.editor-audio-lane-label {
+  color: var(--muted);
+  font-size: 0.33rem;
+}
+
+.editor-audio-lane-rail {
+  display: flex;
+  min-height: 1.65rem;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  border-radius: 0.35rem;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.editor-audio-timeline-clip {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 8%;
+  align-items: center;
+  padding: 0.22rem 0.3rem;
+  overflow: hidden;
+  border: 1px solid rgba(209, 168, 91, 0.22);
+  border-radius: 0.3rem;
+  color: var(--gold-strong);
+  background: linear-gradient(90deg, rgba(209, 168, 91, 0.17), rgba(209, 168, 91, 0.055));
+  text-align: right;
+  cursor: pointer;
+}
+
+.editor-audio-timeline-clip.voiceover {
+  border-color: rgba(110, 231, 255, 0.2);
+  color: var(--cyan-strong);
+  background: linear-gradient(90deg, rgba(110, 231, 255, 0.16), rgba(110, 231, 255, 0.045));
+}
+
+.editor-audio-timeline-clip.selected {
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.editor-audio-timeline-clip span {
+  overflow: hidden;
+  font-size: 0.34rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .editor-tools-section {
   display: flex;
   flex-direction: column;
