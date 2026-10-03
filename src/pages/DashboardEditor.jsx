@@ -74,15 +74,34 @@ function DashboardEditorPage() {
   const musicInputRef = useRef(null);
   const voiceInputRef = useRef(null);
   const previewVideoRef = useRef(null);
+  const crossfadeVideoRef = useRef(null);
   const previewAudioRef = useRef(null);
   const audioTrackRefs = useRef(new Map());
   const mediaRef = useRef([]);
   const [media, setMedia] = useState([]);
   const [clips, setClips] = useState([]);
   const [audioTracks, setAudioTracks] = useState([]);
+  const [textTracks, setTextTracks] = useState([]);
+  const [subtitleTracks, setSubtitleTracks] = useState([]);
   const [playingAudioTrackIds, setPlayingAudioTrackIds] = useState(() => new Set());
   const [selectedClipId, setSelectedClipId] = useState(null);
   const [selectedMediaId, setSelectedMediaId] = useState(null);
+  const [editingTextTrackId, setEditingTextTrackId] = useState(null);
+  const [editingSubtitleTrackId, setEditingSubtitleTrackId] = useState(null);
+  const [textForm, setTextForm] = useState({
+    type: 'title',
+    text: '',
+    startTime: 0,
+    endTime: 3,
+    position: 'middle',
+    fontSize: 28,
+    style: 'plain',
+    color: '#ffffff',
+    background: 'rgba(5, 7, 11, 0.76)',
+    opacity: 1,
+    animation: 'none',
+  });
+  const [subtitleForm, setSubtitleForm] = useState({ text: '', startTime: 0, endTime: 3 });
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -107,7 +126,27 @@ function DashboardEditorPage() {
   const lastClip = timelineClips.at(-1) || null;
   const playheadClip = timelineClips.find((clip) => currentTime >= clip.projectStart && currentTime < clip.projectEnd)
     || (lastClip && currentTime <= lastClip.projectEnd ? lastClip : null);
-  const previewClip = playheadClip || selectedClip;
+  const crossfadePreview = useMemo(() => {
+    for (let index = 1; index < timelineClips.length; index += 1) {
+      const outgoing = timelineClips[index - 1];
+      const incoming = timelineClips[index];
+      if (incoming.transition !== 'crossfade') continue;
+      const duration = Math.min(0.8, outgoing.duration / 2, incoming.duration / 2);
+      const start = outgoing.projectEnd - duration;
+      if (duration > 0.05 && currentTime >= start && currentTime < outgoing.projectEnd) {
+        return { outgoing, incoming, duration, progress: Math.min(1, Math.max(0, (currentTime - start) / duration)) };
+      }
+    }
+    return null;
+  }, [timelineClips, currentTime]);
+  const previewClip = crossfadePreview?.outgoing || playheadClip || selectedClip;
+  const previewClipOpacity = crossfadePreview
+    ? 1 - crossfadePreview.progress
+    : previewClip?.transition === 'fade'
+      ? Math.max(0, Math.min(1, (currentTime - previewClip.projectStart) / Math.min(0.6, previewClip.duration / 2), (previewClip.projectEnd - currentTime) / Math.min(0.6, previewClip.duration / 2)))
+      : 1;
+  const activeTextTracks = textTracks.filter((track) => currentTime >= track.startTime && currentTime < track.endTime);
+  const activeSubtitleTracks = subtitleTracks.filter((track) => currentTime >= track.startTime && currentTime < track.endTime);
   const selectedMedia = mediaById.get(selectedMediaId) || previewClip?.source || null;
   const selectedAudioTrack = audioTracks.find((track) => track.sourceId === selectedMedia?.id) || null;
   const audioAtPlayhead = audioTracks.find((track) => currentTime >= track.startTime && currentTime < track.endTime) || null;
@@ -329,8 +368,8 @@ function DashboardEditorPage() {
       const length = track.trimEnd - value;
       nextTrack = { ...track, trimStart: value, endTime: track.startTime + length };
     } else if (field === 'trimEnd') {
-      if (value <= track.trimStart || value > track.duration) {
-        setErrorMessage('نهاية القص يجب أن تكون بعد بدايته وضمن مدة الملف.');
+      if (value <= track.trimStart || value > track.duration || track.startTime + value - track.trimStart > MAX_TRACK_START_SECONDS) {
+        setErrorMessage('نهاية القص يجب أن تكون بعد بدايته وضمن مدة الملف وحدود المشروع.');
         return;
       }
       nextTrack = { ...track, trimEnd: value, endTime: track.startTime + value - track.trimStart };
@@ -437,6 +476,86 @@ function DashboardEditorPage() {
     setClips((current) => current.map((clip) => clip.id === selectedClip.id ? { ...clip, transition: value } : clip));
   };
 
+  const saveTextTrack = (event) => {
+    event.preventDefault();
+    const startTime = Number(textForm.startTime);
+    const endTime = Number(textForm.endTime);
+    const fontSize = Number(textForm.fontSize);
+    const opacity = Number(textForm.opacity);
+    const timeLimit = projectDuration || MAX_TRACK_START_SECONDS;
+    if (!textForm.text.trim() || !Number.isFinite(startTime) || !Number.isFinite(endTime) || startTime < 0 || startTime >= endTime || endTime > timeLimit) {
+      setErrorMessage('أدخل نصًا صالحًا ووقتًا تكون فيه البداية قبل النهاية وضمن مدة المشروع.');
+      return;
+    }
+    if (!Number.isFinite(fontSize) || fontSize < 12 || fontSize > 96 || !Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
+      setErrorMessage('تحقق من حجم الخط والشفافية.');
+      return;
+    }
+
+    const track = {
+      id: editingTextTrackId || createId(),
+      type: textForm.type,
+      text: textForm.text,
+      startTime,
+      endTime,
+      position: textForm.position,
+      fontSize,
+      style: textForm.style,
+      color: textForm.color,
+      background: textForm.background,
+      opacity,
+      animation: textForm.animation,
+    };
+    setTextTracks((current) => editingTextTrackId
+      ? current.map((item) => item.id === editingTextTrackId ? track : item)
+      : [...current, track]);
+    setEditingTextTrackId(null);
+    setTextForm({ ...textForm, text: '' });
+    setErrorMessage('');
+  };
+
+  const editTextTrack = (track) => {
+    setEditingTextTrackId(track.id);
+    setTextForm({ ...track });
+  };
+
+  const saveSubtitleTrack = (event) => {
+    event.preventDefault();
+    const startTime = Number(subtitleForm.startTime);
+    const endTime = Number(subtitleForm.endTime);
+    const timeLimit = projectDuration || MAX_TRACK_START_SECONDS;
+    if (!subtitleForm.text.trim() || !Number.isFinite(startTime) || !Number.isFinite(endTime) || startTime < 0 || startTime >= endTime || endTime > timeLimit) {
+      setErrorMessage('أدخل نص ترجمة ووقتًا تكون فيه البداية قبل النهاية وضمن مدة المشروع.');
+      return;
+    }
+    const track = {
+      id: editingSubtitleTrackId || createId(),
+      text: subtitleForm.text,
+      startTime,
+      endTime,
+    };
+    setSubtitleTracks((current) => editingSubtitleTrackId
+      ? current.map((item) => item.id === editingSubtitleTrackId ? track : item)
+      : [...current, track]);
+    setEditingSubtitleTrackId(null);
+    setSubtitleForm({ ...subtitleForm, text: '' });
+    setErrorMessage('');
+  };
+
+  const editSubtitleTrack = (track) => {
+    setEditingSubtitleTrackId(track.id);
+    setSubtitleForm({ ...track });
+  };
+
+  const getTextOpacity = (track) => {
+    if (track.animation !== 'fade') return track.opacity;
+    const fadeDuration = Math.min(0.35, (track.endTime - track.startTime) / 2);
+    const elapsed = currentTime - track.startTime;
+    const remaining = track.endTime - currentTime;
+    const fade = Math.min(1, elapsed / fadeDuration, remaining / fadeDuration);
+    return track.opacity * Math.max(0, fade);
+  };
+
   const advanceToNextClip = (clipId) => {
     const index = timelineClips.findIndex((clip) => clip.id === clipId);
     const next = timelineClips[index + 1];
@@ -502,6 +621,17 @@ function DashboardEditorPage() {
     if (isPlaying && video.paused) video.play().catch(() => setIsPlaying(false));
     if (!isPlaying && !video.paused) video.pause();
   }, [currentTime, isPlaying, previewClip?.id, previewClip?.startTime, previewClip?.endTime, previewMedia?.id]);
+
+  useEffect(() => {
+    const video = crossfadeVideoRef.current;
+    const incoming = crossfadePreview?.incoming;
+    if (!video || !incoming || incoming.type !== 'video' || previewMedia?.type === 'audio') return;
+    const sourceTime = incoming.startTime + crossfadePreview.progress * crossfadePreview.duration;
+    if (video.readyState >= 1 && Math.abs(video.currentTime - sourceTime) > 0.12) {
+      video.currentTime = Math.min(sourceTime, incoming.endTime);
+    }
+    if (!video.paused) video.pause();
+  }, [crossfadePreview?.incoming.id, crossfadePreview?.progress, crossfadePreview?.duration, previewMedia?.type]);
 
   useEffect(() => {
     audioTracks.forEach((track) => {
@@ -577,10 +707,18 @@ function DashboardEditorPage() {
               {previewMedia && <span className="editor-media-type">{previewMedia.type === 'video' ? 'فيديو' : previewMedia.type === 'image' ? 'صورة' : 'صوت'}</span>}
             </div>
             <div className="editor-preview-stage">
-                {!previewMedia && <div className="editor-preview-empty"><span className="editor-preview-mark">▶</span><strong>أضف وسائط لبدء المعاينة</strong><small>ستظهر معاينة الملف المحدد هنا</small></div>}
-                {previewMedia?.type === 'video' && previewClip && <video key={previewClip.id} ref={previewVideoRef} src={previewMedia.url} controls playsInline preload="metadata" onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={(event) => handleVideoTimeUpdate(event, previewClip)} onEnded={() => advanceToNextClip(previewClip.id)} />}
-                {previewMedia?.type === 'image' && <img key={`${previewClip?.id || previewMedia.id}-${previewMedia.id}`} src={previewMedia.url} alt={previewMedia.file.name} />}
-                {previewMedia?.type === 'audio' && <div className="editor-audio-preview"><span className="editor-audio-mark">♫</span><strong>{previewMedia.file.name}</strong><audio key={previewMedia.id} ref={previewAudioRef} src={previewMedia.url} controls preload="metadata" onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)} onTimeUpdate={(event) => setCurrentTime(Math.min(event.currentTarget.currentTime, projectDuration))} /></div>}
+              {!previewMedia && <div className="editor-preview-empty"><span className="editor-preview-mark">▶</span><strong>أضف وسائط لبدء المعاينة</strong><small>ستظهر معاينة الملف المحدد هنا</small></div>}
+              {(previewMedia?.type === 'video' || previewMedia?.type === 'image') && <div className="editor-preview-visual">
+                {previewMedia.type === 'video' && previewClip && <video key={previewClip.id} ref={previewVideoRef} src={previewMedia.url} controls playsInline preload="metadata" style={{ opacity: previewClipOpacity }} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={(event) => handleVideoTimeUpdate(event, previewClip)} onEnded={() => advanceToNextClip(previewClip.id)} />}
+                {previewMedia.type === 'image' && <img key={`${previewClip?.id || previewMedia.id}-${previewMedia.id}`} src={previewMedia.url} alt={previewMedia.file.name} style={{ opacity: previewClipOpacity }} />}
+                {crossfadePreview?.incoming.source.type === 'image' && <img className="editor-crossfade-layer" src={crossfadePreview.incoming.source.url} alt={crossfadePreview.incoming.source.file.name} style={{ opacity: crossfadePreview.progress }} />}
+                {crossfadePreview?.incoming.source.type === 'video' && <video className="editor-crossfade-layer" key={`crossfade-${crossfadePreview.incoming.id}`} ref={crossfadeVideoRef} src={crossfadePreview.incoming.source.url} muted playsInline preload="metadata" style={{ opacity: crossfadePreview.progress }} onLoadedMetadata={(event) => { event.currentTarget.currentTime = crossfadePreview.incoming.startTime + crossfadePreview.progress * crossfadePreview.duration; }} />}
+                <div className="editor-preview-overlays" aria-live="polite">
+                  {activeTextTracks.map((track, index) => <div className={`editor-text-overlay ${track.position} ${track.style}`} key={track.id} dir="auto" style={{ color: track.color, background: track.background, fontSize: `${track.fontSize}px`, opacity: getTextOpacity(track), '--overlay-index': index }}>{track.text}</div>)}
+                  {activeSubtitleTracks.map((track, index) => <div className="editor-subtitle-overlay" key={track.id} dir="auto" style={{ '--overlay-index': index }}>{track.text}</div>)}
+                </div>
+              </div>}
+              {previewMedia?.type === 'audio' && <div className="editor-audio-preview"><span className="editor-audio-mark">♫</span><strong>{previewMedia.file.name}</strong><audio key={previewMedia.id} ref={previewAudioRef} src={previewMedia.url} controls preload="metadata" onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)} onTimeUpdate={(event) => { const track = selectedAudioTrack; setCurrentTime(track ? Math.min(track.endTime, track.startTime + event.currentTarget.currentTime - track.trimStart) : Math.min(event.currentTarget.currentTime, projectDuration)); }} /></div>}
             </div>
           </section>
 
@@ -645,6 +783,34 @@ function DashboardEditorPage() {
             )}
           </section>
 
+          <section className="editor-section editor-text-section" aria-labelledby="editor-text-title">
+            <div className="editor-section-heading">
+              <div><h2 id="editor-text-title">النص والترجمة</h2><p>مسارات مستقلة تظهر عند وقتها على المعاينة فقط.</p></div>
+            </div>
+
+            <form className="editor-text-form" onSubmit={saveTextTrack}>
+              <div className="editor-text-form-heading"><strong>{editingTextTrackId ? 'تعديل Text Track' : 'إضافة Text Track'}</strong><span>{textTracks.length} مسار</span></div>
+              <label>نوع النص<select value={textForm.type} onChange={(event) => setTextForm((form) => ({ ...form, type: event.target.value }))}><option value="title">عنوان</option><option value="body">نص عادي</option><option value="subtitle">ترجمة</option><option value="cta">CTA</option></select></label>
+              <label>النص<textarea value={textForm.text} onChange={(event) => setTextForm((form) => ({ ...form, text: event.target.value }))} dir="auto" placeholder="اكتب النص الظاهر فوق المعاينة..." /></label>
+              <div className="editor-text-time-fields"><label>البداية<input type="number" min="0" max={MAX_TRACK_START_SECONDS} step="0.1" value={textForm.startTime} onChange={(event) => setTextForm((form) => ({ ...form, startTime: event.target.value }))} /></label><label>النهاية<input type="number" min="0.1" max={projectDuration || MAX_TRACK_START_SECONDS} step="0.1" value={textForm.endTime} onChange={(event) => setTextForm((form) => ({ ...form, endTime: event.target.value }))} /></label></div>
+              <div className="editor-text-style-fields"><label>الموضع<select value={textForm.position} onChange={(event) => setTextForm((form) => ({ ...form, position: event.target.value }))}><option value="top">أعلى</option><option value="middle">وسط</option><option value="bottom">أسفل</option></select></label><label>حجم الخط<input type="number" min="12" max="96" step="1" value={textForm.fontSize} onChange={(event) => setTextForm((form) => ({ ...form, fontSize: event.target.value }))} /></label><label>النمط<select value={textForm.style} onChange={(event) => setTextForm((form) => ({ ...form, style: event.target.value }))}><option value="plain">عادي</option><option value="outline">محدد</option><option value="card">بطاقة</option></select></label></div>
+              <div className="editor-text-style-fields"><label>لون النص<input type="color" value={textForm.color} onChange={(event) => setTextForm((form) => ({ ...form, color: event.target.value }))} /></label><label>الخلفية<select value={textForm.background} onChange={(event) => setTextForm((form) => ({ ...form, background: event.target.value }))}><option value="transparent">شفافة</option><option value="rgba(5, 7, 11, 0.76)">داكنة</option><option value="rgba(209, 168, 91, 0.76)">ذهبية</option><option value="rgba(110, 231, 255, 0.7)">سماوية</option></select></label><label>الشفافية<input type="range" min="0.1" max="1" step="0.05" value={textForm.opacity} onChange={(event) => setTextForm((form) => ({ ...form, opacity: event.target.value }))} /></label></div>
+              <label>دخول النص<select value={textForm.animation} onChange={(event) => setTextForm((form) => ({ ...form, animation: event.target.value }))}><option value="none">بدون</option><option value="fade">Fade</option></select></label>
+              <div className="editor-text-form-actions"><button type="submit" className="mini-action-btn gold-btn">{editingTextTrackId ? 'حفظ التعديل' : 'إضافة نص'}</button>{editingTextTrackId && <button type="button" className="mini-action-btn" onClick={() => { setEditingTextTrackId(null); setTextForm({ ...textForm, text: '' }); }}>إلغاء التعديل</button>}</div>
+            </form>
+
+            {textTracks.length > 0 && <div className="editor-overlay-track-list">{textTracks.map((track) => <article className={`editor-overlay-track ${editingTextTrackId === track.id ? 'selected' : ''}`} key={track.id}><button type="button" className="editor-overlay-track-select" onClick={() => { setEditingTextTrackId(track.id); setTextForm({ ...track }); seekProject(track.startTime); }}><strong>{track.type === 'title' ? 'عنوان' : track.type === 'body' ? 'نص عادي' : track.type === 'subtitle' ? 'ترجمة' : 'CTA'}</strong><span dir="auto">{track.text}</span><small>{formatTime(track.startTime)} – {formatTime(track.endTime)} · {track.position}</small></button><button type="button" className="editor-icon-button remove" aria-label="حذف Text Track" onClick={() => { setTextTracks((current) => current.filter((item) => item.id !== track.id)); if (editingTextTrackId === track.id) setEditingTextTrackId(null); }}>×</button></article>)}</div>}
+
+            <form className="editor-subtitle-form" onSubmit={saveSubtitleTrack}>
+              <div className="editor-text-form-heading"><strong>{editingSubtitleTrackId ? 'تعديل سطر ترجمة' : 'إضافة سطر ترجمة'}</strong><span>{subtitleTracks.length} سطر</span></div>
+              <label>نص الترجمة<textarea value={subtitleForm.text} onChange={(event) => setSubtitleForm((form) => ({ ...form, text: event.target.value }))} dir="auto" placeholder="اكتب سطر الترجمة..." /></label>
+              <div className="editor-text-time-fields"><label>البداية<input type="number" min="0" max={MAX_TRACK_START_SECONDS} step="0.1" value={subtitleForm.startTime} onChange={(event) => setSubtitleForm((form) => ({ ...form, startTime: event.target.value }))} /></label><label>النهاية<input type="number" min="0.1" max={projectDuration || MAX_TRACK_START_SECONDS} step="0.1" value={subtitleForm.endTime} onChange={(event) => setSubtitleForm((form) => ({ ...form, endTime: event.target.value }))} /></label></div>
+              <div className="editor-text-form-actions"><button type="submit" className="mini-action-btn">{editingSubtitleTrackId ? 'حفظ الترجمة' : 'إضافة سطر'}</button>{editingSubtitleTrackId && <button type="button" className="mini-action-btn" onClick={() => { setEditingSubtitleTrackId(null); setSubtitleForm({ ...subtitleForm, text: '' }); }}>إلغاء</button>}</div>
+            </form>
+
+            {subtitleTracks.length > 0 && <div className="editor-overlay-track-list">{subtitleTracks.map((track) => <article className={`editor-overlay-track subtitle ${editingSubtitleTrackId === track.id ? 'selected' : ''}`} key={track.id}><button type="button" className="editor-overlay-track-select" onClick={() => { setEditingSubtitleTrackId(track.id); setSubtitleForm({ ...track }); seekProject(track.startTime); }}><strong>ترجمة</strong><span dir="auto">{track.text}</span><small>{formatTime(track.startTime)} – {formatTime(track.endTime)}</small></button><button type="button" className="editor-icon-button remove" aria-label="حذف سطر الترجمة" onClick={() => { setSubtitleTracks((current) => current.filter((item) => item.id !== track.id)); if (editingSubtitleTrackId === track.id) setEditingSubtitleTrackId(null); }}>×</button></article>)}</div>}
+          </section>
+
           <section className="editor-section" aria-labelledby="editor-media-bin-title">
             <div className="editor-section-heading">
               <div><h2 id="editor-media-bin-title">Media Bin</h2><p>{media.length ? `${media.length} ملف` : 'لا توجد وسائط مضافة'}</p></div>
@@ -654,7 +820,7 @@ function DashboardEditorPage() {
             ) : (
               <div className="editor-media-list">
                 {media.map((item, index) => (
-                  <article className={`editor-media-item ${activeMediaId === item.id ? 'selected' : ''}`} key={item.id}>
+                  <article className={`editor-media-item ${selectedMediaId === item.id ? 'selected' : ''}`} key={item.id}>
                     <button type="button" className="editor-media-select" onClick={() => selectMedia(item)} aria-label={`معاينة ${item.file.name}`}>
                       <span className={`editor-file-icon ${item.type}`}>{item.type === 'video' ? '▶' : item.type === 'image' ? '▧' : '♫'}</span>
                       <span className="editor-file-copy"><strong>{item.file.name}</strong><small>{formatFileSize(item.file.size)} · {item.type === 'video' ? 'فيديو' : item.type === 'image' ? 'صورة' : 'صوت'}</small></span>
@@ -681,6 +847,8 @@ function DashboardEditorPage() {
                 <input className="editor-playhead" type="range" min="0" max={Math.max(projectDuration, 0.1)} step="0.1" value={Math.min(currentTime, projectDuration)} onChange={(event) => seekProject(event.target.value)} disabled={!projectDuration} aria-label="مؤشر التشغيل" />
                 {timelineClips.length > 0 && <div className="editor-track"><span className="editor-track-label">مقاطع</span><div className="editor-clip-row">{timelineClips.map((item, index) => <div className={`editor-clip ${item.type} ${item.id === selectedClipId ? 'selected' : ''}`} key={item.id}><button type="button" className="editor-clip-select" onClick={() => selectClip(item.id)}><span>{item.type === 'video' ? '▶' : '▧'} {index + 1} · {formatTime(item.duration)}</span><strong>{item.source.file.name}</strong>{item.transition !== 'none' && <small>{item.transition === 'fade' ? 'Fade' : 'Crossfade'}</small>}</button><span className="editor-clip-order"><button type="button" onClick={() => moveClip(item.id, -1)} disabled={index === 0} aria-label="ترتيب المقطع للأعلى">↑</button><button type="button" onClick={() => moveClip(item.id, 1)} disabled={index === timelineClips.length - 1} aria-label="ترتيب المقطع للأسفل">↓</button></span></div>)}</div></div>}
                 {audioTracks.length > 0 && <div className="editor-track audio"><span className="editor-track-label">مسارات الصوت</span><div className="editor-audio-timeline-lane">{audioTracks.map((track) => <div className="editor-audio-lane-row" key={track.id}><span className="editor-audio-lane-label">{track.type === 'voiceover' ? '🎙️ تعليق صوتي' : '🎵 موسيقى'}</span><div className="editor-audio-lane-rail"><button type="button" className={`editor-audio-timeline-clip ${track.type} ${selectedMediaId === track.sourceId ? 'selected' : ''}`} style={{ marginInlineStart: `${projectDuration ? (track.startTime / projectDuration) * 100 : 0}%`, width: `${projectDuration ? Math.max(8, ((track.endTime - track.startTime) / projectDuration) * 100) : 100}%` }} onClick={() => selectAudioTrack(track)}><span>{track.name}</span></button></div></div>)}</div></div>}
+                {textTracks.length > 0 && <div className="editor-track editor-overlay-timeline-track"><span className="editor-track-label">نصوص</span><div className="editor-overlay-timeline-lane">{textTracks.map((track) => <button type="button" className={`editor-overlay-timeline-clip text ${editingTextTrackId === track.id ? 'selected' : ''}`} key={track.id} style={{ marginInlineStart: `${projectDuration ? (track.startTime / projectDuration) * 100 : 0}%`, width: `${projectDuration ? Math.max(8, ((track.endTime - track.startTime) / projectDuration) * 100) : 100}%` }} onClick={() => { setEditingTextTrackId(track.id); setTextForm({ ...track }); seekProject(track.startTime); }}><span>{track.text}</span></button>)}</div></div>}
+                {subtitleTracks.length > 0 && <div className="editor-track editor-overlay-timeline-track"><span className="editor-track-label">ترجمة</span><div className="editor-overlay-timeline-lane">{subtitleTracks.map((track) => <button type="button" className={`editor-overlay-timeline-clip subtitle ${editingSubtitleTrackId === track.id ? 'selected' : ''}`} key={track.id} style={{ marginInlineStart: `${projectDuration ? (track.startTime / projectDuration) * 100 : 0}%`, width: `${projectDuration ? Math.max(8, ((track.endTime - track.startTime) / projectDuration) * 100) : 100}%` }} onClick={() => { setEditingSubtitleTrackId(track.id); setSubtitleForm({ ...track }); seekProject(track.startTime); }}><span>{track.text}</span></button>)}</div></div>}
                 {!timelineClips.length && <div className="editor-track-empty">لا توجد مقاطع فيديو أو صور بعد</div>}
               </div>
             )}
